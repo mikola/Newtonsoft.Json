@@ -1,7 +1,7 @@
 ﻿properties { 
-  $zipFileName = "Json45r8.zip"
+  $zipFileName = "Json45r10.zip"
   $majorVersion = "4.5"
-  $majorWithReleaseVersion = "4.5.8"
+  $majorWithReleaseVersion = "4.5.10"
   $version = GetVersion $majorWithReleaseVersion
   $signAssemblies = $false
   $signKeyPath = "D:\Development\Releases\newtonsoft.snk"
@@ -17,8 +17,8 @@
   $workingDir = "$baseDir\Working"
   $builds = @(
     @{Name = "Newtonsoft.Json"; TestsName = "Newtonsoft.Json.Tests"; Constants=""; FinalDir="Net40"; NuGetDir = "net40"; Framework="net-4.0"; Sign=$true},
-    @{Name = "Newtonsoft.Json.Portable"; TestsName = "Newtonsoft.Json.Tests.Portable"; Constants="PORTABLE"; FinalDir="Portable"; NuGetDir = $null; Framework="net-4.0"; Sign=$true},
-    @{Name = "Newtonsoft.Json.Metro"; TestsName = $null; Constants="NETFX_CORE"; FinalDir="Metro"; NuGetDir = "winrt45"; Framework="net-4.5"; Sign=$true},
+    @{Name = "Newtonsoft.Json.Portable"; TestsName = "Newtonsoft.Json.Tests.Portable"; Constants="PORTABLE"; FinalDir="Portable"; NuGetDir = "portable-net40+sl4+wp7+win8"; Framework="net-4.0"; Sign=$true},
+    @{Name = "Newtonsoft.Json.WinRT"; TestsName = $null; Constants="NETFX_CORE"; FinalDir="WinRT"; NuGetDir = "winrt45"; Framework="net-4.5"; Sign=$true},
     
     # unsigned SL/WP
     @{Name = "Newtonsoft.Json.WindowsPhone"; TestsName = $null; Constants="SILVERLIGHT;WINDOWS_PHONE"; FinalDir="WindowsPhone"; NuGetDir = "sl3-wp,sl4-windowsphone71"; Framework="net-4.0"; Sign=$false},

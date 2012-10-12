@@ -761,6 +761,18 @@ To fix this error either change the JSON to a {1} or change the deserialized typ
       return false;
     }
 
+    private void AddReference(JsonReader reader, string id, object value)
+    {
+      try
+      {
+        Serializer.ReferenceResolver.AddReference(this, id, value);
+      }
+      catch (Exception ex)
+      {
+        throw JsonSerializationException.Create(reader, "Error reading object reference '{0}'.".FormatWith(CultureInfo.InvariantCulture, id), ex);
+      }
+    }
+
     private bool HasFlag(DefaultValueHandling value, DefaultValueHandling flag)
     {
       return ((value & flag) == flag);
@@ -799,7 +811,7 @@ To fix this error either change the JSON to a {1} or change the deserialized typ
       object dictionary = wrappedDictionary.UnderlyingDictionary;
 
       if (id != null)
-        Serializer.ReferenceResolver.AddReference(this, id, dictionary);
+        AddReference(reader, id, dictionary);
 
       contract.InvokeOnDeserializing(dictionary, Serializer.Context);
 
@@ -872,7 +884,7 @@ To fix this error either change the JSON to a {1} or change the deserialized typ
       int rank = contract.UnderlyingType.GetArrayRank();
 
       if (id != null)
-        Serializer.ReferenceResolver.AddReference(this, id, list);
+        AddReference(reader, id, list);
 
       contract.InvokeOnDeserializing(list, Serializer.Context);
 
@@ -1010,7 +1022,7 @@ To fix this error either change the JSON to a {1} or change the deserialized typ
       object list = wrappedList.UnderlyingCollection;
 
       if (id != null)
-        Serializer.ReferenceResolver.AddReference(this, id, list);
+        AddReference(reader, id, list);
 
       // can't populate an existing array
       if (wrappedList.IsFixedSize)
@@ -1137,7 +1149,7 @@ To fix this error either change the environment to be fully trusted, change the 
       object createdObject = contract.ISerializableCreator(serializationInfo, Serializer.Context);
 
       if (id != null)
-        Serializer.ReferenceResolver.AddReference(this, id, createdObject);
+        AddReference(reader, id, createdObject);
 
       // these are together because OnDeserializing takes an object but for an ISerializable the object is fully created in the constructor
       contract.InvokeOnDeserializing(createdObject, Serializer.Context);
@@ -1153,7 +1165,7 @@ To fix this error either change the environment to be fully trusted, change the 
       IDynamicMetaObjectProvider newObject;
 
       if (contract.UnderlyingType.IsInterface() || contract.UnderlyingType.IsAbstract())
-        throw JsonSerializationException.Create(reader, "Could not create an instance of type {0}. Type is an interface or abstract class and cannot be instantated.".FormatWith(CultureInfo.InvariantCulture, contract.UnderlyingType));
+        throw JsonSerializationException.Create(reader, "Could not create an instance of type {0}. Type is an interface or abstract class and cannot be instantiated.".FormatWith(CultureInfo.InvariantCulture, contract.UnderlyingType));
 
       if (contract.DefaultCreator != null &&
         (!contract.DefaultCreatorNonPublic || Serializer.ConstructorHandling == ConstructorHandling.AllowNonPublicDefaultConstructor))
@@ -1162,7 +1174,7 @@ To fix this error either change the environment to be fully trusted, change the 
         throw JsonSerializationException.Create(reader, "Unable to find a default constructor to use for type {0}.".FormatWith(CultureInfo.InvariantCulture, contract.UnderlyingType));
 
       if (id != null)
-        Serializer.ReferenceResolver.AddReference(this, id, newObject);
+        AddReference(reader, id, newObject);
 
       contract.InvokeOnDeserializing(newObject, Serializer.Context);
 
@@ -1257,7 +1269,7 @@ To fix this error either change the environment to be fully trusted, change the 
       object createdObject = constructorInfo.Invoke(constructorParameters.Values.ToArray());
 
       if (id != null)
-        Serializer.ReferenceResolver.AddReference(this, id, createdObject);
+        AddReference(reader, id, createdObject);
 
       contract.InvokeOnDeserializing(createdObject, Serializer.Context);
 
@@ -1434,7 +1446,7 @@ To fix this error either change the environment to be fully trusted, change the 
       object newObject = null;
 
       if (objectContract.UnderlyingType.IsInterface() || objectContract.UnderlyingType.IsAbstract())
-        throw JsonSerializationException.Create(reader, "Could not create an instance of type {0}. Type is an interface or abstract class and cannot be instantated.".FormatWith(CultureInfo.InvariantCulture, objectContract.UnderlyingType));
+        throw JsonSerializationException.Create(reader, "Could not create an instance of type {0}. Type is an interface or abstract class and cannot be instantiated.".FormatWith(CultureInfo.InvariantCulture, objectContract.UnderlyingType));
 
       if (objectContract.OverrideConstructor != null)
       {
@@ -1478,7 +1490,7 @@ To fix this error either change the environment to be fully trusted, change the 
         : null;
 
       if (id != null)
-        Serializer.ReferenceResolver.AddReference(this, id, newObject);
+        AddReference(reader, id, newObject);
 
       int initialDepth = reader.Depth;
 

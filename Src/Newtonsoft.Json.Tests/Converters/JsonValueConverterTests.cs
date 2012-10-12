@@ -35,6 +35,8 @@ using Windows.Data.Json;
 using System.IO;
 using System.Diagnostics;
 using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
+using System.Linq;
 #endif
 
 namespace Newtonsoft.Json.Tests.Converters
@@ -232,7 +234,40 @@ namespace Newtonsoft.Json.Tests.Converters
 ]", json);
     }
 
-    //[Test]
+    [Test]
+    public void SerializeDouble()
+    {
+      JsonObject o = new JsonObject();
+      o["zero"] = JsonValue.CreateNumberValue(0);
+      o["int"] = JsonValue.CreateNumberValue(1);
+      o["smallfraction"] = JsonValue.CreateNumberValue(3.0000000000000009);
+      o["double"] = JsonValue.CreateNumberValue(1.1);
+      o["probablyint"] = JsonValue.CreateNumberValue(1.0);
+      o["Epsilon"] = JsonValue.CreateNumberValue(double.Epsilon);
+      o["MinValue"] = JsonValue.CreateNumberValue(double.MinValue);
+      o["MaxValue"] = JsonValue.CreateNumberValue(double.MaxValue);
+      o["NaN"] = JsonValue.CreateNumberValue(double.NaN);
+      o["NegativeInfinity"] = JsonValue.CreateNumberValue(double.NegativeInfinity);
+      o["PositiveInfinity"] = JsonValue.CreateNumberValue(double.PositiveInfinity);
+
+      string json = JsonConvert.SerializeObject(o, Formatting.Indented);
+
+      Assert.AreEqual(@"{
+  ""PositiveInfinity"": Infinity,
+  ""NegativeInfinity"": -Infinity,
+  ""MinValue"": -1.7976931348623157E+308,
+  ""double"": 1.1,
+  ""int"": 1,
+  ""zero"": 0,
+  ""Epsilon"": 4.94065645841247E-324,
+  ""MaxValue"": 1.7976931348623157E+308,
+  ""NaN"": NaN,
+  ""smallfraction"": 3.0000000000000009,
+  ""probablyint"": 1
+}", json);
+    }
+
+    [Test]
     public void DeserializePerformance()
     {
       Stopwatch timer = new Stopwatch();
@@ -288,7 +323,7 @@ namespace Newtonsoft.Json.Tests.Converters
       Console.WriteLine(jsonnet);
     }
 
-    //[Test]
+    [Test]
     public void SerializePerformance()
     {
       JsonObject o = JsonObject.Parse(@"{
@@ -339,6 +374,90 @@ namespace Newtonsoft.Json.Tests.Converters
       throw new Exception(string.Format("winrt: {0}, jsonnet: {1}, jsonnet linq: {2}", winrt, jsonnet, linq));
       Console.WriteLine(winrt);
       Console.WriteLine(jsonnet);
+    }
+
+    [Test]
+    public void ParseJson()
+    {
+      string json = @"{
+        ""channel"": {
+          ""title"": ""James Newton-King"",
+          ""link"": ""http://james.newtonking.com"",
+          ""description"": ""James Newton-King's blog."",
+          ""item"": [
+            {
+              ""title"": ""Json.NET 1.3 + New license + Now on CodePlex"",
+              ""description"": ""Annoucing the release of Json.NET 1.3, the MIT license and the source being available on CodePlex"",
+              ""link"": ""http://james.newtonking.com/projects/json-net.aspx"",
+              ""category"": [
+                ""Json.NET"",
+                ""CodePlex""
+              ]
+            }
+          ]
+        }
+      }";
+
+      // Windows.Data.Json
+      // -----------------
+      JsonObject jsonObject = JsonObject.Parse(json);
+      string itemTitle1 = jsonObject["channel"].GetObject()["item"].GetArray()[0].GetObject()["title"].GetString();
+      
+      // LINQ to JSON
+      // ------------
+      JObject jObject = JObject.Parse(json);
+      string itemTitle2 = (string)jObject["channel"]["item"][0]["title"];
+    }
+
+    [Test]
+    public void CreateJson()
+    {
+      // Windows.Data.Json
+      // -----------------
+      JsonObject jsonObject = new JsonObject
+        {
+          {"CPU", JsonValue.CreateStringValue("Intel")},
+          {"Drives", new JsonArray {
+              JsonValue.CreateStringValue("DVD read/writer"),
+              JsonValue.CreateStringValue("500 gigabyte hard drive")
+            }
+          }
+        };
+      string json1 = jsonObject.Stringify();
+
+      // LINQ to JSON
+      // ------------
+      JObject jObject = new JObject
+        {
+          {"CPU", "Intel"},
+          {"Drives", new JArray {
+              "DVD read/writer",
+              "500 gigabyte hard drive"
+            }
+          }
+        };
+      string json2 = jObject.ToString();
+    }
+
+    [Test]
+    public void Converting()
+    {
+      JsonObject jsonObject = new JsonObject
+        {
+          {"CPU", JsonValue.CreateStringValue("Intel")},
+          {"Drives", new JsonArray {
+              JsonValue.CreateStringValue("DVD read/writer"),
+              JsonValue.CreateStringValue("500 gigabyte hard drive")
+            }
+          }
+        };
+
+      // convert Windows.Data.Json to LINQ to JSON
+      JObject o = JObject.FromObject(jsonObject);
+
+      // convert LINQ to JSON to Windows.Data.Json
+      JArray a = (JArray)o["Drives"];
+      JsonArray jsonArray = a.ToObject<JsonArray>();
     }
   }
 }
