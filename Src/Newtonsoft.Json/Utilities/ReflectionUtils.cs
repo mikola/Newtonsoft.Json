@@ -709,7 +709,7 @@ namespace Newtonsoft.Json.Utilities
     {
       T[] attributes = GetAttributes<T>(attributeProvider, inherit);
 
-      return attributes.SingleOrDefault();
+      return (attributes != null) ? attributes.SingleOrDefault() : null;
     }
 
 #if !(NETFX_CORE)
@@ -1049,8 +1049,10 @@ namespace Newtonsoft.Json.Utilities
       if (type == typeof(Guid))
         return new Guid();
 
+#if !NET20
       if (type == typeof(DateTimeOffset))
         return new DateTimeOffset();
+#endif
 
       if (IsNullable(type))
         return null;

@@ -70,6 +70,15 @@ namespace Newtonsoft.Json.Linq
     /// Initializes a new instance of the <see cref="JValue"/> class with the given value.
     /// </summary>
     /// <param name="value">The value.</param>
+    public JValue(char value)
+      : this(value, JTokenType.String)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="JValue"/> class with the given value.
+    /// </summary>
+    /// <param name="value">The value.</param>
     [CLSCompliant(false)]
     public JValue(ulong value)
       : this(value, JTokenType.Integer)
@@ -126,7 +135,7 @@ namespace Newtonsoft.Json.Linq
     /// </summary>
     /// <param name="value">The value.</param>
     public JValue(Guid value)
-      : this(value, JTokenType.String)
+      : this(value, JTokenType.Guid)
     {
     }
 
@@ -135,7 +144,7 @@ namespace Newtonsoft.Json.Linq
     /// </summary>
     /// <param name="value">The value.</param>
     public JValue(Uri value)
-      : this(value, JTokenType.String)
+      : this(value, (value != null) ? JTokenType.Uri : JTokenType.Null)
     {
     }
 
@@ -144,7 +153,7 @@ namespace Newtonsoft.Json.Linq
     /// </summary>
     /// <param name="value">The value.</param>
     public JValue(TimeSpan value)
-      : this(value, JTokenType.String)
+      : this(value, JTokenType.TimeSpan)
     {
     }
 
@@ -219,9 +228,11 @@ namespace Newtonsoft.Json.Linq
             DateTime date1 = (DateTime)objA;
             DateTime date2;
 
+#if !NET20
             if (objB is DateTimeOffset)
               date2 = ((DateTimeOffset)objB).DateTime;
             else
+#endif
               date2 = Convert.ToDateTime(objB, CultureInfo.InvariantCulture);
 
             return date1.CompareTo(date2);

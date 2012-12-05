@@ -117,6 +117,10 @@
     <Compile Include="Converters\StringEnumConverterTests.cs" />
     <Compile Include="Converters\VersionConverterTests.cs" />
     <Compile Include="Documentation\ConvertingJsonAndXmlTests.cs" />
+    <Compile Include="Documentation\ConditionalPropertiesTests.cs" />
+    <Compile Include="Documentation\TraceWriterTests.cs" />
+    <Compile Include="Documentation\JsonNetVsWindowsDataJsonTests.cs" />
+    <Compile Include="Documentation\PerformanceTests.cs" />
     <Compile Include="Documentation\JsonSchemaTests.cs" />
     <Compile Include="Documentation\ReadingAndWritingJsonTests.cs" />
     <Compile Include="Documentation\LinqToJsonTests.cs" />
@@ -150,6 +154,7 @@
     <Compile Include="Serialization\DefaultValueHandlingTests.cs" />
     <Compile Include="Serialization\DynamicTests.cs" />
     <Compile Include="Serialization\ReferenceLoopHandlingTests.cs" />
+    <Compile Include="Serialization\TraceWriterTests.cs" />
     <Compile Include="Serialization\WebApiIntegrationTests.cs" />
     <Compile Include="Serialization\JsonPropertyCollectionTests.cs" />
     <Compile Include="Serialization\NullValueHandlingTests.cs" />
@@ -290,6 +295,7 @@
     <Compile Include="TestObjects\UserNullable.cs" />
     <Compile Include="Utilities\DynamicReflectionDelegateFactoryTests.cs" />
     <Compile Include="Utilities\ReflectionUtilsTests.cs" />
+    <Compile Include="Utilities\StringUtilsTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Newtonsoft.Json\Newtonsoft.Json.csproj">

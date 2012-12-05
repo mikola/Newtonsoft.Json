@@ -33,7 +33,6 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Web.Script.Serialization;
 using System.Xml.Linq;
-using System.Xml.Serialization;
 using Newtonsoft.Json.Utilities;
 using NUnit.Framework;
 using System.Runtime.Serialization.Json;
@@ -65,8 +64,8 @@ namespace Newtonsoft.Json.Tests
   [TestFixture]
   public class PerformanceTests : TestFixtureBase
   {
-    private const int Iterations = 100;
-    //private const int Iterations = 5000;
+    //private const int Iterations = 100;
+    private const int Iterations = 5000;
 
 #region Data
 
@@ -153,6 +152,7 @@ namespace Newtonsoft.Json.Tests
       BenchmarkDeserializeMethod<T>(SerializeMethod.JavaScriptSerializer, json);
       BenchmarkDeserializeMethod<T>(SerializeMethod.DataContractJsonSerializer, json);
       BenchmarkDeserializeMethod<T>(SerializeMethod.JsonNet, json);
+      BenchmarkDeserializeMethod<T>(SerializeMethod.JsonNetManual, json);
     }
 
     [Test]
@@ -289,6 +289,85 @@ namespace Newtonsoft.Json.Tests
       watch.Stop();
       var performance2 = (totalIterations/watch.ElapsedMilliseconds)*1000;
       Console.WriteLine("XML: " + watch.Elapsed.TotalSeconds);
+    }
+
+    [Test]
+    public void SerializeString()
+    {
+      string text = @"The general form of an HTML element is therefore: <tag attribute1=""value1"" attribute2=""value2"">content</tag>.
+Some HTML elements are defined as empty elements and take the form <tag attribute1=""value1"" attribute2=""value2"" >.
+Empty elements may enclose no content, for instance, the BR tag or the inline IMG tag.
+The name of an HTML element is the name used in the tags.
+Note that the end tag's name is preceded by a slash character, ""/"", and that in empty elements the end tag is neither required nor allowed.
+If attributes are not mentioned, default values are used in each case.
+
+The general form of an HTML element is therefore: <tag attribute1=""value1"" attribute2=""value2"">content</tag>.
+Some HTML elements are defined as empty elements and take the form <tag attribute1=""value1"" attribute2=""value2"" >.
+Empty elements may enclose no content, for instance, the BR tag or the inline IMG tag.
+The name of an HTML element is the name used in the tags.
+Note that the end tag's name is preceded by a slash character, ""/"", and that in empty elements the end tag is neither required nor allowed.
+If attributes are not mentioned, default values are used in each case.
+
+The general form of an HTML element is therefore: <tag attribute1=""value1"" attribute2=""value2"">content</tag>.
+Some HTML elements are defined as empty elements and take the form <tag attribute1=""value1"" attribute2=""value2"" >.
+Empty elements may enclose no content, for instance, the BR tag or the inline IMG tag.
+The name of an HTML element is the name used in the tags.
+Note that the end tag's name is preceded by a slash character, ""/"", and that in empty elements the end tag is neither required nor allowed.
+If attributes are not mentioned, default values are used in each case.
+";
+
+      int interations = 1000;
+
+      TimeOperation(() =>
+      {
+        for (int i = 0; i < interations; i++)
+        {
+          using (StringWriter w = StringUtils.CreateStringWriter(StringUtils.GetLength(text) ?? 16))
+          {
+            JavaScriptUtils.WriteEscapedJavaScriptString(w, text, '"', true, JavaScriptUtils.DoubleQuoteCharEscapeFlags, StringEscapeHandling.Default);
+          }
+        }
+
+        return "";
+      }, "New");
+    }
+
+    [Test]
+    public void JTokenToObject()
+    {
+      JValue s = new JValue("String!");
+
+      int interations = 1000000;
+
+      TimeOperation(() =>
+      {
+        for (int i = 0; i < interations; i++)
+        {
+          s.ToObject(typeof (string));
+        }
+
+        return "";
+      }, "New");
+
+      TimeOperation(() =>
+      {
+        for (int i = 0; i < interations; i++)
+        {
+          s.ToObject(typeof(string), new JsonSerializer());
+        }
+
+        return "";
+      }, "Old");
+
+      TimeOperation(() =>
+      {
+        for (int i = 0; i < interations; i++)
+        {
+          s.Value<string>();
+        }
+
+        return "";
+      }, "Value");
     }
 
     private void SerializeSize(object value)
@@ -658,12 +737,94 @@ namespace Newtonsoft.Json.Tests
 
       var value = (T) serializer.Deserialize(new StringReader(json), type);
       return value;
-      //JsonTextReader reader = new JsonTextReader(new StringReader(JsonText));
-      //while (reader.Read())
-      //{
+    }
 
-      //}
-      //return default(T);
+    public TestClass DeserializeJsonNetManual(string json)
+    {
+      TestClass c = new TestClass();
+
+      JsonTextReader reader = new JsonTextReader(new StringReader(json));
+      reader.Read();
+      while (reader.Read())
+      {
+        if (reader.TokenType == JsonToken.PropertyName)
+        {
+          string propertyName = (string) reader.Value;
+          switch (propertyName)
+          {
+            case "strings":
+              reader.Read();
+              while (reader.Read() && reader.TokenType != JsonToken.EndArray)
+              {
+                c.strings.Add((string) reader.Value);
+              }
+              break;
+            case "dictionary":
+              reader.Read();
+              while (reader.Read() && reader.TokenType != JsonToken.EndObject)
+              {
+                string key = (string) reader.Value;
+                c.dictionary.Add(key, reader.ReadAsInt32().GetValueOrDefault());
+              }
+              break;
+            case "Name":
+              c.Name = reader.ReadAsString();
+              break;
+            case "Now":
+              c.Now = reader.ReadAsDateTime().GetValueOrDefault();
+              break;
+            case "BigNumber":
+              c.BigNumber = reader.ReadAsDecimal().GetValueOrDefault();
+              break;
+            case "Address1":
+              reader.Read();
+              c.Address1 = CreateAddress(reader);
+              break;
+            case "Addresses":
+              reader.Read();
+              while (reader.Read() && reader.TokenType != JsonToken.EndArray)
+              {
+                var address = CreateAddress(reader);
+                c.Addresses.Add(address);
+              }
+              break;
+          }
+        }
+        else
+        {
+          break;
+        }
+      }
+
+      return c;
+    }
+
+    private static Address CreateAddress(JsonTextReader reader)
+    {
+      Address a = new Address();
+      while (reader.Read())
+      {
+        if (reader.TokenType == JsonToken.PropertyName)
+        {
+          switch ((string) reader.Value)
+          {
+            case "Street":
+              a.Street = reader.ReadAsString();
+              break;
+            case "Phone":
+              a.Phone = reader.ReadAsString();
+              break;
+            case "Entered":
+              a.Entered = reader.ReadAsDateTime().GetValueOrDefault();
+              break;
+          }
+        }
+        else
+        {
+          break;
+        }
+      }
+      return a;
     }
 
     public T DeserializeJsonNetBinary<T>(byte[] bson)
@@ -703,6 +864,11 @@ namespace Newtonsoft.Json.Tests
           return DeserializeJsonNet<T>((string)json, false);
         case SerializeMethod.JsonNetWithIsoConverter:
           return DeserializeJsonNet<T>((string)json, true);
+        case SerializeMethod.JsonNetManual:
+          if (typeof(T) == typeof(TestClass))
+            return (T)(object)DeserializeJsonNetManual((string)json);
+
+          return default(T);
         case SerializeMethod.JsonNetBinary:
           return DeserializeJsonNetBinary<T>((byte[]) json);
         case SerializeMethod.BinaryFormatter:
