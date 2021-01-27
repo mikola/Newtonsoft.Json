@@ -1,4 +1,5 @@
-﻿#if NET20
+﻿
+#if !HAVE_LINQ
 
 #region License, Terms and Author(s)
 //
@@ -33,6 +34,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using Newtonsoft.Json.Serialization;
+
+#nullable disable
 
 namespace Newtonsoft.Json.Utilities.LinqBridge
 {
@@ -71,7 +74,14 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     {
       CheckNotNull(source, "source");
 
-      return CastYield<TResult>(source);
+        var servesItself = source as IEnumerable<TResult>;
+        if (servesItself != null
+            && (!(servesItself is TResult[]) || servesItself.GetType().GetElementType() == typeof(TResult)))
+        {
+            return servesItself;
+        }
+
+        return CastYield<TResult>(source);
     }
 
     private static IEnumerable<TResult> CastYield<TResult>(
@@ -150,11 +160,20 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
       this IEnumerable<TSource> source,
       Func<TSource, bool> predicate)
     {
+      CheckNotNull(source, "source");
       CheckNotNull(predicate, "predicate");
 
-      return source.Where((item, i) => predicate(item));
+      return WhereYield(source, predicate);
     }
 
+    private static IEnumerable<TSource> WhereYield<TSource>(
+      IEnumerable<TSource> source,
+      Func<TSource, bool> predicate)
+    {
+      foreach (var item in source)
+        if (predicate(item))
+          yield return item;
+    }
     /// <summary>
     /// Filters a sequence of values based on a predicate. 
     /// Each element's index is used in the logic of the predicate function.
@@ -188,9 +207,18 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
       this IEnumerable<TSource> source,
       Func<TSource, TResult> selector)
     {
+      CheckNotNull(source, "source");
       CheckNotNull(selector, "selector");
 
-      return source.Select((item, i) => selector(item));
+      return SelectYield(source, selector);
+    }
+
+    private static IEnumerable<TResult> SelectYield<TSource, TResult>(
+      IEnumerable<TSource> source,
+      Func<TSource, TResult> selector)
+    {
+      foreach (var item in source)
+        yield return selector(item);
     }
 
     /// <summary>
@@ -349,7 +377,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
       Func<TSource> empty)
     {
       CheckNotNull(source, "source");
-      Debug.Assert(empty != null);
+      MiscellaneousUtils.Assert(empty != null);
 
       var list = source as IList<TSource>; // optimized case for lists
       if (list != null)
@@ -611,9 +639,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
 
     private static IEnumerable<TSource> ReverseYield<TSource>(IEnumerable<TSource> source)
     {
-      var stack = new Stack<TSource>();
-      foreach (var item in source)
-        stack.Push(item);
+      var stack = new Stack<TSource>(source);
 
       foreach (var item in stack)
         yield return item;
@@ -705,9 +731,21 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
       CheckNotNull(source, "source");
 
       var collection = source as ICollection;
-      return collection != null
-               ? collection.Count
-               : source.Aggregate(0, (count, item) => checked(count + 1));
+      if (collection != null)
+      {
+        return collection.Count;
+      }
+
+      using (var en = source.GetEnumerator())
+      {
+        int count = 0;
+        while (en.MoveNext())
+        {
+          ++count;
+        }
+
+        return count;
+      }
     }
 
     /// <summary>
@@ -723,7 +761,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Returns an <see cref="Int64"/> that represents the total number 
+    /// Returns a <see cref="Int64"/> that represents the total number
     /// of elements in a sequence.
     /// </summary>
 
@@ -739,7 +777,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Returns an <see cref="Int64"/> that represents how many elements 
+    /// Returns a <see cref="Int64"/> that represents how many elements
     /// in a sequence satisfy a condition.
     /// </summary>
 
@@ -787,17 +825,25 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
       return new List<TSource>(source);
     }
 
-    /// <summary>
-    /// Creates an array from an <see cref="IEnumerable{T}"/>.
-    /// </summary>
+      /// <summary>
+      /// Creates an array from an <see cref="IEnumerable{T}"/>.
+      /// </summary>
 
-    public static TSource[] ToArray<TSource>(
-      this IEnumerable<TSource> source)
-    {
-      return source.ToList().ToArray();
-    }
+      public static TSource[] ToArray<TSource>(
+        this IEnumerable<TSource> source)
+      {
+          IList<TSource> ilist = source as IList<TSource>;
+          if (ilist != null)
+          {
+              TSource[] array = new TSource[ilist.Count];
+              ilist.CopyTo(array, 0);
+              return array;
+          }
 
-    /// <summary>
+          return source.ToList().ToArray();
+      }
+
+      /// <summary>
     /// Returns distinct elements from a sequence by using the default 
     /// equality comparer to compare values.
     /// </summary>
@@ -1220,7 +1266,15 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
       this IEnumerable<TSource> source,
       Func<TSource, bool> predicate)
     {
-      return source.Where(predicate).Any();
+      foreach (TSource item in source)
+      {
+        if (predicate(item))
+        {
+          return true;
+        }
+      }
+
+      return false;
     }
 
     /// <summary>
@@ -1280,7 +1334,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
       IEnumerable<TSource> second,
       IEqualityComparer<TSource> comparer)
     {
-      CheckNotNull(first, "frist");
+      CheckNotNull(first, "first");
       CheckNotNull(second, "second");
 
       comparer = comparer ?? EqualityComparer<TSource>.Default;
@@ -1310,7 +1364,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
       Func<TSource, TSource, bool> lesser)
     {
       CheckNotNull(source, "source");
-      Debug.Assert(lesser != null);
+      MiscellaneousUtils.Assert(lesser != null);
 
       return source.Aggregate((a, item) => lesser(a, item) ? a : item);
     }
@@ -1324,7 +1378,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
       TSource? seed, Func<TSource?, TSource?, bool> lesser) where TSource : struct
     {
       CheckNotNull(source, "source");
-      Debug.Assert(lesser != null);
+      MiscellaneousUtils.Assert(lesser != null);
 
       return source.Aggregate(seed, (a, item) => lesser(a, item) ? a : item);
       //  == MinMaxImpl(Repeat<TSource?>(null, 1).Concat(source), lesser);
@@ -1388,7 +1442,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
 
     private static IEnumerable<T> Renumerable<T>(this IEnumerator<T> e)
     {
-      Debug.Assert(e != null);
+      MiscellaneousUtils.Assert(e != null);
 
       do
       {
@@ -1652,7 +1706,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
         // ToDictionary is meant to throw ArgumentNullException if
         // keySelector produces a key that is null and 
         // Argument exception if keySelector produces duplicate keys 
-        // for two elements. Incidentally, the doucmentation for
+        // for two elements. Incidentally, the documentation for
         // IDictionary<TKey, TValue>.Add says that the Add method
         // throws the same exceptions under the same circumstances
         // so we don't need to do any additional checking or work
@@ -1776,7 +1830,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
   internal partial class Enumerable
   {
     /// <summary>
-    /// Computes the sum of a sequence of nullable <see cref="System.Int32" /> values.
+    /// Computes the sum of a sequence of <see cref="System.Int32" /> values.
     /// </summary>
 
     public static int Sum(
@@ -1792,7 +1846,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the sum of a sequence of nullable <see cref="System.Int32" /> 
+    /// Computes the sum of a sequence of <see cref="System.Int32" />
     /// values that are obtained by invoking a transform function on 
     /// each element of the input sequence.
     /// </summary>
@@ -1805,7 +1859,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the average of a sequence of nullable <see cref="System.Int32" /> values.
+    /// Computes the average of a sequence of <see cref="System.Int32" /> values.
     /// </summary>
 
     public static double Average(
@@ -1830,7 +1884,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the average of a sequence of nullable <see cref="System.Int32" /> values 
+    /// Computes the average of a sequence of <see cref="System.Int32" /> values
     /// that are obtained by invoking a transform function on each 
     /// element of the input sequence.
     /// </summary>
@@ -1844,7 +1898,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
 
 
     /// <summary>
-    /// Computes the sum of a sequence of <see cref="System.Int32" /> values.
+    /// Computes the sum of a sequence of nullable <see cref="System.Int32" /> values.
     /// </summary>
 
     public static int? Sum(
@@ -1860,7 +1914,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the sum of a sequence of <see cref="System.Int32" /> 
+    /// Computes the sum of a sequence of nullable <see cref="System.Int32" />
     /// values that are obtained by invoking a transform function on 
     /// each element of the input sequence.
     /// </summary>
@@ -1873,7 +1927,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the average of a sequence of <see cref="System.Int32" /> values.
+    /// Computes the average of a sequence of nullable <see cref="System.Int32" /> values.
     /// </summary>
 
     public static double? Average(
@@ -1898,7 +1952,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the average of a sequence of <see cref="System.Int32" /> values 
+    /// Computes the average of a sequence of nullable <see cref="System.Int32" /> values
     /// that are obtained by invoking a transform function on each 
     /// element of the input sequence.
     /// </summary>
@@ -1962,7 +2016,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the sum of a sequence of nullable <see cref="System.Int64" /> values.
+    /// Computes the sum of a sequence of <see cref="System.Int64" /> values.
     /// </summary>
 
     public static long Sum(
@@ -1978,7 +2032,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the sum of a sequence of nullable <see cref="System.Int64" /> 
+    /// Computes the sum of a sequence of <see cref="System.Int64" />
     /// values that are obtained by invoking a transform function on 
     /// each element of the input sequence.
     /// </summary>
@@ -1991,7 +2045,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the average of a sequence of nullable <see cref="System.Int64" /> values.
+    /// Computes the average of a sequence of <see cref="System.Int64" /> values.
     /// </summary>
 
     public static double Average(
@@ -2016,7 +2070,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the average of a sequence of nullable <see cref="System.Int64" /> values 
+    /// Computes the average of a sequence of <see cref="System.Int64" /> values
     /// that are obtained by invoking a transform function on each 
     /// element of the input sequence.
     /// </summary>
@@ -2030,7 +2084,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
 
 
     /// <summary>
-    /// Computes the sum of a sequence of <see cref="System.Int64" /> values.
+    /// Computes the sum of a sequence of nullable <see cref="System.Int64" /> values.
     /// </summary>
 
     public static long? Sum(
@@ -2046,7 +2100,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the sum of a sequence of <see cref="System.Int64" /> 
+    /// Computes the sum of a sequence of nullable <see cref="System.Int64" />
     /// values that are obtained by invoking a transform function on 
     /// each element of the input sequence.
     /// </summary>
@@ -2059,7 +2113,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the average of a sequence of <see cref="System.Int64" /> values.
+    /// Computes the average of a sequence of nullable <see cref="System.Int64" /> values.
     /// </summary>
 
     public static double? Average(
@@ -2084,7 +2138,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the average of a sequence of <see cref="System.Int64" /> values 
+    /// Computes the average of a sequence of nullable <see cref="System.Int64" /> values
     /// that are obtained by invoking a transform function on each 
     /// element of the input sequence.
     /// </summary>
@@ -2164,7 +2218,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the sum of a sequence of nullable <see cref="System.Single" /> 
+    /// Computes the sum of a sequence of <see cref="System.Single" />
     /// values that are obtained by invoking a transform function on 
     /// each element of the input sequence.
     /// </summary>
@@ -2177,7 +2231,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the average of a sequence of nullable <see cref="System.Single" /> values.
+    /// Computes the average of a sequence of <see cref="System.Single" /> values.
     /// </summary>
 
     public static float Average(
@@ -2202,7 +2256,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the average of a sequence of nullable <see cref="System.Single" /> values 
+    /// Computes the average of a sequence of <see cref="System.Single" /> values
     /// that are obtained by invoking a transform function on each 
     /// element of the input sequence.
     /// </summary>
@@ -2216,7 +2270,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
 
 
     /// <summary>
-    /// Computes the sum of a sequence of <see cref="System.Single" /> values.
+    /// Computes the sum of a sequence of nullable <see cref="System.Single" /> values.
     /// </summary>
 
     public static float? Sum(
@@ -2232,7 +2286,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the sum of a sequence of <see cref="System.Single" /> 
+    /// Computes the sum of a sequence of nullable <see cref="System.Single" />
     /// values that are obtained by invoking a transform function on 
     /// each element of the input sequence.
     /// </summary>
@@ -2245,7 +2299,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the average of a sequence of <see cref="System.Single" /> values.
+    /// Computes the average of a sequence of nullable <see cref="System.Single" /> values.
     /// </summary>
 
     public static float? Average(
@@ -2270,7 +2324,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the average of a sequence of <see cref="System.Single" /> values 
+    /// Computes the average of a sequence of nullable <see cref="System.Single" /> values
     /// that are obtained by invoking a transform function on each 
     /// element of the input sequence.
     /// </summary>
@@ -2334,7 +2388,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the sum of a sequence of nullable <see cref="System.Double" /> values.
+    /// Computes the sum of a sequence of <see cref="System.Double" /> values.
     /// </summary>
 
     public static double Sum(
@@ -2350,7 +2404,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the sum of a sequence of nullable <see cref="System.Double" /> 
+    /// Computes the sum of a sequence of <see cref="System.Double" />
     /// values that are obtained by invoking a transform function on 
     /// each element of the input sequence.
     /// </summary>
@@ -2363,7 +2417,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the average of a sequence of nullable <see cref="System.Double" /> values.
+    /// Computes the average of a sequence of <see cref="System.Double" /> values.
     /// </summary>
 
     public static double Average(
@@ -2388,7 +2442,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the average of a sequence of nullable <see cref="System.Double" /> values 
+    /// Computes the average of a sequence of <see cref="System.Double" /> values
     /// that are obtained by invoking a transform function on each 
     /// element of the input sequence.
     /// </summary>
@@ -2402,7 +2456,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
 
 
     /// <summary>
-    /// Computes the sum of a sequence of <see cref="System.Double" /> values.
+    /// Computes the sum of a sequence of nullable <see cref="System.Double" /> values.
     /// </summary>
 
     public static double? Sum(
@@ -2418,7 +2472,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the sum of a sequence of <see cref="System.Double" /> 
+    /// Computes the sum of a sequence of nullable <see cref="System.Double" />
     /// values that are obtained by invoking a transform function on 
     /// each element of the input sequence.
     /// </summary>
@@ -2431,7 +2485,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the average of a sequence of <see cref="System.Double" /> values.
+    /// Computes the average of a sequence of nullable <see cref="System.Double" /> values.
     /// </summary>
 
     public static double? Average(
@@ -2456,7 +2510,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the average of a sequence of <see cref="System.Double" /> values 
+    /// Computes the average of a sequence of nullable <see cref="System.Double" /> values
     /// that are obtained by invoking a transform function on each 
     /// element of the input sequence.
     /// </summary>
@@ -2520,7 +2574,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the sum of a sequence of nullable <see cref="System.Decimal" /> values.
+    /// Computes the sum of a sequence of <see cref="System.Decimal" /> values.
     /// </summary>
 
     public static decimal Sum(
@@ -2536,7 +2590,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the sum of a sequence of nullable <see cref="System.Decimal" /> 
+    /// Computes the sum of a sequence of <see cref="System.Decimal" />
     /// values that are obtained by invoking a transform function on 
     /// each element of the input sequence.
     /// </summary>
@@ -2545,11 +2599,20 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
       this IEnumerable<TSource> source,
       Func<TSource, decimal> selector)
     {
-      return source.Select(selector).Sum();
+      CheckNotNull(source, "source");
+      CheckNotNull(selector, "selector");
+
+      decimal sum = 0;
+      foreach (TSource item in source)
+      {
+        sum += selector(item);
+      }
+
+        return sum;
     }
 
     /// <summary>
-    /// Computes the average of a sequence of nullable <see cref="System.Decimal" /> values.
+    /// Computes the average of a sequence of <see cref="System.Decimal" /> values.
     /// </summary>
 
     public static decimal Average(
@@ -2574,7 +2637,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the average of a sequence of nullable <see cref="System.Decimal" /> values 
+    /// Computes the average of a sequence of <see cref="System.Decimal" /> values
     /// that are obtained by invoking a transform function on each 
     /// element of the input sequence.
     /// </summary>
@@ -2588,7 +2651,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
 
 
     /// <summary>
-    /// Computes the sum of a sequence of <see cref="System.Decimal" /> values.
+    /// Computes the sum of a sequence of nullable <see cref="System.Decimal" /> values.
     /// </summary>
 
     public static decimal? Sum(
@@ -2604,7 +2667,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the sum of a sequence of <see cref="System.Decimal" /> 
+    /// Computes the sum of a sequence of nullable <see cref="System.Decimal" />
     /// values that are obtained by invoking a transform function on 
     /// each element of the input sequence.
     /// </summary>
@@ -2617,7 +2680,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the average of a sequence of <see cref="System.Decimal" /> values.
+    /// Computes the average of a sequence of nullable <see cref="System.Decimal" /> values.
     /// </summary>
 
     public static decimal? Average(
@@ -2642,7 +2705,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     }
 
     /// <summary>
-    /// Computes the average of a sequence of <see cref="System.Decimal" /> values 
+    /// Computes the average of a sequence of nullable <see cref="System.Decimal" /> values
     /// that are obtained by invoking a transform function on each 
     /// element of the input sequence.
     /// </summary>
@@ -2771,12 +2834,9 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
     /// Gets the number of key/value collection pairs in the <see cref="Lookup{TKey,TElement}" />.
     /// </summary>
 
-    public int Count
-    {
-      get { return _map.Count; }
-    }
+    public int Count => _map.Count;
 
-    /// <summary>
+      /// <summary>
     /// Gets the collection of values indexed by the specified key.
     /// </summary>
 
@@ -2933,10 +2993,10 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
   }
 
   [Serializable]
-  internal struct Tuple<TFirst, TSecond> : IEquatable<Tuple<TFirst, TSecond>>
+  internal readonly struct Tuple<TFirst, TSecond> : IEquatable<Tuple<TFirst, TSecond>>
   {
-    public TFirst First { get; private set; }
-    public TSecond Second { get; private set; }
+    public TFirst First { get; }
+    public TSecond Second { get; }
 
     public Tuple(TFirst first, TSecond second)
       : this()
@@ -2974,6 +3034,7 @@ namespace Newtonsoft.Json.Utilities.LinqBridge
 
 namespace Newtonsoft.Json.Serialization
 {
+#pragma warning disable 1591
   public delegate TResult Func<TResult>();
 
   public delegate TResult Func<T, TResult>(T a);
@@ -2991,6 +3052,7 @@ namespace Newtonsoft.Json.Serialization
   public delegate void Action<T1, T2, T3>(T1 arg1, T2 arg2, T3 arg3);
 
   public delegate void Action<T1, T2, T3, T4>(T1 arg1, T2 arg2, T3 arg3, T4 arg4);
+#pragma warning restore 1591
 }
 
 namespace System.Runtime.CompilerServices

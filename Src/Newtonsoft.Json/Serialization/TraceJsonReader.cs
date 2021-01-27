@@ -1,4 +1,29 @@
-﻿using System;
+﻿#region License
+// Copyright (c) 2007 James Newton-King
+//
+// Permission is hereby granted, free of charge, to any person
+// obtaining a copy of this software and associated documentation
+// files (the "Software"), to deal in the Software without
+// restriction, including without limitation the rights to use,
+// copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the
+// Software is furnished to do so, subject to the following
+// conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+// OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+// HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+// WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+// OTHER DEALINGS IN THE SOFTWARE.
+#endregion
+
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -6,135 +31,127 @@ using System.Text;
 
 namespace Newtonsoft.Json.Serialization
 {
-  internal class TraceJsonReader : JsonReader, IJsonLineInfo
-  {
-    private readonly JsonReader _innerReader;
-    private readonly JsonTextWriter _textWriter;
-    private readonly StringWriter _sw;
-
-    public TraceJsonReader(JsonReader innerReader)
+    internal class TraceJsonReader : JsonReader, IJsonLineInfo
     {
-      _innerReader = innerReader;
+        private readonly JsonReader _innerReader;
+        private readonly JsonTextWriter _textWriter;
+        private readonly StringWriter _sw;
 
-      _sw = new StringWriter(CultureInfo.InvariantCulture);
-      _textWriter = new JsonTextWriter(_sw);
-      _textWriter.Formatting = Formatting.Indented;
-    }
+        public TraceJsonReader(JsonReader innerReader)
+        {
+            _innerReader = innerReader;
 
-    public string GetJson()
-    {
-      return _sw.ToString();
-    }
+            _sw = new StringWriter(CultureInfo.InvariantCulture);
+            // prefix the message in the stringwriter to avoid concat with a potentially large JSON string
+            _sw.Write("Deserialized JSON: " + Environment.NewLine);
 
-    public override bool Read()
-    {
-      var value = _innerReader.Read();
-      _textWriter.WriteToken(_innerReader, false, false);
-      return value;
-    }
+            _textWriter = new JsonTextWriter(_sw);
+            _textWriter.Formatting = Formatting.Indented;
+        }
 
-    public override int? ReadAsInt32()
-    {
-      var value = _innerReader.ReadAsInt32();
-      _textWriter.WriteToken(_innerReader, false, false);
-      return value;
-    }
+        public string GetDeserializedJsonMessage()
+        {
+            return _sw.ToString();
+        }
 
-    public override string ReadAsString()
-    {
-      var value = _innerReader.ReadAsString();
-      _textWriter.WriteToken(_innerReader, false, false);
-      return value;
-    }
+        public override bool Read()
+        {
+            bool value = _innerReader.Read();
+            WriteCurrentToken();
+            return value;
+        }
 
-    public override byte[] ReadAsBytes()
-    {
-      var value = _innerReader.ReadAsBytes();
-      _textWriter.WriteToken(_innerReader, false, false);
-      return value;
-    }
+        public override int? ReadAsInt32()
+        {
+            int? value = _innerReader.ReadAsInt32();
+            WriteCurrentToken();
+            return value;
+        }
 
-    public override decimal? ReadAsDecimal()
-    {
-      var value = _innerReader.ReadAsDecimal();
-      _textWriter.WriteToken(_innerReader, false, false);
-      return value;
-    }
+        public override string? ReadAsString()
+        {
+            string? value = _innerReader.ReadAsString();
+            WriteCurrentToken();
+            return value;
+        }
 
-    public override DateTime? ReadAsDateTime()
-    {
-      var value = _innerReader.ReadAsDateTime();
-      _textWriter.WriteToken(_innerReader, false, false);
-      return value;
-    }
+        public override byte[]? ReadAsBytes()
+        {
+            byte[]? value = _innerReader.ReadAsBytes();
+            WriteCurrentToken();
+            return value;
+        }
 
-#if !NET20
-    public override DateTimeOffset? ReadAsDateTimeOffset()
-    {
-      var value = _innerReader.ReadAsDateTimeOffset();
-      _textWriter.WriteToken(_innerReader, false, false);
-      return value;
-    }
+        public override decimal? ReadAsDecimal()
+        {
+            decimal? value = _innerReader.ReadAsDecimal();
+            WriteCurrentToken();
+            return value;
+        }
+
+        public override double? ReadAsDouble()
+        {
+            double? value = _innerReader.ReadAsDouble();
+            WriteCurrentToken();
+            return value;
+        }
+
+        public override bool? ReadAsBoolean()
+        {
+            bool? value = _innerReader.ReadAsBoolean();
+            WriteCurrentToken();
+            return value;
+        }
+
+        public override DateTime? ReadAsDateTime()
+        {
+            DateTime? value = _innerReader.ReadAsDateTime();
+            WriteCurrentToken();
+            return value;
+        }
+
+#if HAVE_DATE_TIME_OFFSET
+        public override DateTimeOffset? ReadAsDateTimeOffset()
+        {
+            DateTimeOffset? value = _innerReader.ReadAsDateTimeOffset();
+            WriteCurrentToken();
+            return value;
+        }
 #endif
 
-    public override int Depth
-    {
-      get { return _innerReader.Depth; }
-    }
+        public void WriteCurrentToken()
+        {
+            _textWriter.WriteToken(_innerReader, false, false, true);
+        }
 
-    public override string Path
-    {
-      get { return _innerReader.Path; }
-    }
+        public override int Depth => _innerReader.Depth;
 
-    public override char QuoteChar
-    {
-      get { return _innerReader.QuoteChar; }
-      protected internal set { _innerReader.QuoteChar = value; }
-    }
+        public override string Path => _innerReader.Path;
 
-    public override JsonToken TokenType
-    {
-      get { return _innerReader.TokenType; }
-    }
+        public override char QuoteChar
+        {
+            get => _innerReader.QuoteChar;
+            protected internal set => _innerReader.QuoteChar = value;
+        }
 
-    public override object Value
-    {
-      get { return _innerReader.Value; }
-    }
+        public override JsonToken TokenType => _innerReader.TokenType;
 
-    public override Type ValueType
-    {
-      get { return _innerReader.ValueType; }
-    }
+        public override object? Value => _innerReader.Value;
 
-    public override void Close()
-    {
-      _innerReader.Close();
-    }
+        public override Type ?ValueType => _innerReader.ValueType;
 
-    bool IJsonLineInfo.HasLineInfo()
-    {
-      IJsonLineInfo lineInfo = _innerReader as IJsonLineInfo;
-      return lineInfo != null && lineInfo.HasLineInfo();
-    }
+        public override void Close()
+        {
+            _innerReader.Close();
+        }
 
-    int IJsonLineInfo.LineNumber
-    {
-      get
-      {
-        IJsonLineInfo lineInfo = _innerReader as IJsonLineInfo;
-        return (lineInfo != null) ? lineInfo.LineNumber : 0;
-      }
-    }
+        bool IJsonLineInfo.HasLineInfo()
+        {
+            return _innerReader is IJsonLineInfo lineInfo && lineInfo.HasLineInfo();
+        }
 
-    int IJsonLineInfo.LinePosition
-    {
-      get
-      {
-        IJsonLineInfo lineInfo = _innerReader as IJsonLineInfo;
-        return (lineInfo != null) ? lineInfo.LinePosition : 0;
-      }
+        int IJsonLineInfo.LineNumber => (_innerReader is IJsonLineInfo lineInfo) ? lineInfo.LineNumber : 0;
+
+        int IJsonLineInfo.LinePosition => (_innerReader is IJsonLineInfo lineInfo) ? lineInfo.LinePosition : 0;
     }
-  }
 }

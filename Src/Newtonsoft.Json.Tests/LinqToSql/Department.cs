@@ -23,6 +23,7 @@
 // OTHER DEALINGS IN THE SOFTWARE.
 #endregion
 
+#if !(DNXCORE50 || NET20)
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -32,12 +33,14 @@ using System.Text;
 
 namespace Newtonsoft.Json.Tests.LinqToSql
 {
-  [MetadataType(typeof(DepartmentMetadata))]
-  public partial class Department
-  {
-    [JsonConverter(typeof(DepartmentConverter))]
-    public class DepartmentMetadata
+    [MetadataType(typeof(DepartmentMetadata))]
+    public partial class Department
     {
+        [JsonConverter(typeof(DepartmentConverter))]
+        public class DepartmentMetadata
+        {
+        }
     }
-  }
 }
+
+#endif

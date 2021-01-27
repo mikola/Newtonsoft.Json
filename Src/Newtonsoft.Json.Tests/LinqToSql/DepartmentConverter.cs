@@ -23,41 +23,49 @@
 // OTHER DEALINGS IN THE SOFTWARE.
 #endregion
 
+#if !(NET20 || DNXCORE50)
+
 using System;
 using System.Collections.Generic;
+#if NET20
+using Newtonsoft.Json.Utilities.LinqBridge;
+#else
 using System.Linq;
+#endif
 using System.Text;
 using Newtonsoft.Json.Linq;
 
 namespace Newtonsoft.Json.Tests.LinqToSql
 {
-  public class DepartmentConverter : JsonConverter
-  {
-    public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+    public class DepartmentConverter : JsonConverter
     {
-      Department department = (Department)value;
+        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+        {
+            Department department = (Department)value;
 
-      JObject o = new JObject();
-      o["DepartmentId"] = new JValue(department.DepartmentId.ToString());
-      o["Name"] = new JValue(new string(department.Name.Reverse().ToArray()));
+            JObject o = new JObject();
+            o["DepartmentId"] = new JValue(department.DepartmentId.ToString());
+            o["Name"] = new JValue(new string(department.Name.Reverse().ToArray()));
 
-      o.WriteTo(writer);
+            o.WriteTo(writer);
+        }
+
+        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+        {
+            JObject o = JObject.Load(reader);
+
+            Department department = new Department();
+            department.DepartmentId = new Guid((string)o["DepartmentId"]);
+            department.Name = new string(((string)o["Name"]).Reverse().ToArray());
+
+            return department;
+        }
+
+        public override bool CanConvert(Type objectType)
+        {
+            return (objectType == typeof(Department));
+        }
     }
-
-    public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
-    {
-      JObject o = JObject.Load(reader);
-
-      Department department = new Department();
-      department.DepartmentId = new Guid((string)o["DepartmentId"]);
-      department.Name = new string(((string) o["Name"]).Reverse().ToArray());
-
-      return department;
-    }
-
-    public override bool CanConvert(Type objectType)
-    {
-      return (objectType == typeof (Department));
-    }
-  }
 }
+
+#endif

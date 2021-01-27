@@ -25,22 +25,10 @@
 
 namespace Newtonsoft.Json.Tests.TestObjects
 {
-  public enum RoleTransferOperation
-  {
-    First,
-    Second
-  }
-
-  public enum RoleTransferDirection
-  {
-    First,
-    Second
-  }
-
-  public class RoleTransfer
-  {
-    public RoleTransferOperation Operation { get; set; }   //This is enum type
-    public string RoleName { get; set; }
-    public RoleTransferDirection Direction { get; set; }   //This is enum type
-  }
+    public class RoleTransfer
+    {
+        public RoleTransferOperation Operation { get; set; } //This is enum type
+        public string RoleName { get; set; }
+        public RoleTransferDirection Direction { get; set; } //This is enum type
+    }
 }

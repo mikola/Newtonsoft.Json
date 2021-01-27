@@ -1,195 +1,329 @@
-﻿properties { 
-  $zipFileName = "Json50r5.zip"
-  $majorVersion = "4.5"
-  $majorWithReleaseVersion = "5.0.5"
+﻿properties {
+  $zipFileName = "Json120r3.zip"
+  $majorVersion = "12.0"
+  $majorWithReleaseVersion = "12.0.3"
+  $nugetPrerelease = $null
   $version = GetVersion $majorWithReleaseVersion
+  $packageId = "Newtonsoft.Json"
   $signAssemblies = $false
-  $signKeyPath = "D:\Development\Releases\newtonsoft.snk"
+  $signKeyPath = "C:\Development\Releases\newtonsoft.snk"
   $buildDocumentation = $false
-  $buildNuGet = $false
+  $buildNuGet = $true
+  $msbuildVerbosity = 'minimal'
   $treatWarningsAsErrors = $false
-  
+  $workingName = if ($workingName) {$workingName} else {"Working"}
+  $assemblyVersion = if ($assemblyVersion) {$assemblyVersion} else {$majorVersion + '.0.0'}
+  $netCliChannel = "Current"
+  $netCliVersion = "5.0.100"
+  $nugetUrl = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
+  $ensureNetCliSdk = $true
+
   $baseDir  = resolve-path ..
   $buildDir = "$baseDir\Build"
   $sourceDir = "$baseDir\Src"
-  $toolsDir = "$baseDir\Tools"
   $docDir = "$baseDir\Doc"
   $releaseDir = "$baseDir\Release"
-  $workingDir = "$baseDir\Working"
+  $workingDir = "$baseDir\$workingName"
+
+  $nugetPath = "$buildDir\Temp\nuget.exe"
+  $vswhereVersion = "2.3.2"
+  $vswherePath = "$buildDir\Temp\vswhere.$vswhereVersion"
+  $nunitConsoleVersion = "3.8.0"
+  $nunitConsolePath = "$buildDir\Temp\NUnit.ConsoleRunner.$nunitConsoleVersion"
+
   $builds = @(
-    @{Name = "Newtonsoft.Json"; TestsName = "Newtonsoft.Json.Tests"; Constants=""; FinalDir="Net45"; NuGetDir = "net45"; Framework="net-4.0"; Sign=$true},
-    @{Name = "Newtonsoft.Json.Portable"; TestsName = "Newtonsoft.Json.Tests.Portable"; Constants="PORTABLE"; FinalDir="Portable"; NuGetDir = "portable-net45+wp80+win8"; Framework="net-4.0"; Sign=$true},
-    @{Name = "Newtonsoft.Json.Portable40"; TestsName = "Newtonsoft.Json.Tests.Portable40"; Constants="PORTABLE40"; FinalDir="Portable40"; NuGetDir = "portable-net40+sl4+wp7+win8"; Framework="net-4.0"; Sign=$true},
-    @{Name = "Newtonsoft.Json.WinRT"; TestsName = $null; Constants="NETFX_CORE"; FinalDir="WinRT"; NuGetDir = "netcore45"; Framework="net-4.5"; Sign=$true},
-    @{Name = "Newtonsoft.Json.Net40"; TestsName = "Newtonsoft.Json.Tests.Net40"; Constants="NET40"; FinalDir="Net40"; NuGetDir = "net40"; Framework="net-4.0"; Sign=$true},
-    @{Name = "Newtonsoft.Json.Net35"; TestsName = "Newtonsoft.Json.Tests.Net35"; Constants="NET35"; FinalDir="Net35"; NuGetDir = "net35"; Framework="net-2.0"; Sign=$true},
-    @{Name = "Newtonsoft.Json.Net20"; TestsName = "Newtonsoft.Json.Tests.Net20"; Constants="NET20"; FinalDir="Net20"; NuGetDir = "net20"; Framework="net-2.0"; Sign=$true}
+    @{Framework = "netstandard2.0"; TestsFunction = "NetCliTests"; TestFramework = "net5.0"; Enabled=$true},
+    @{Framework = "netstandard1.3"; TestsFunction = "NetCliTests"; TestFramework = "netcoreapp3.1"; Enabled=$true},
+    @{Framework = "netstandard1.0"; TestsFunction = "NetCliTests"; TestFramework = "netcoreapp2.1"; Enabled=$true},
+    @{Framework = "net45"; TestsFunction = "NUnitTests"; TestFramework = "net46"; NUnitFramework="net-4.0"; Enabled=$true},
+    @{Framework = "net40"; TestsFunction = "NUnitTests"; NUnitFramework="net-4.0"; Enabled=$true},
+    @{Framework = "net35"; TestsFunction = "NUnitTests"; NUnitFramework="net-2.0"; Enabled=$true},
+    @{Framework = "net20"; TestsFunction = "NUnitTests"; NUnitFramework="net-2.0"; Enabled=$true}
   )
 }
 
-$framework = '4.0x86'
+framework '4.6x86'
 
-task default -depends Test
+task default -depends Test,Package
 
 # Ensure a clean working directory
 task Clean {
+  Write-Host "Setting location to $baseDir"
   Set-Location $baseDir
-  
+
   if (Test-Path -path $workingDir)
   {
-    Write-Output "Deleting Working Directory"
-    
-    del $workingDir -Recurse -Force
+    Write-Host "Deleting existing working directory $workingDir"
+
+    Execute-Command -command { del $workingDir -Recurse -Force }
   }
-  
+
+  Write-Host "Creating working directory $workingDir"
   New-Item -Path $workingDir -ItemType Directory
+
 }
 
 # Build each solution, optionally signed
-task Build -depends Clean { 
-  Write-Host -ForegroundColor Green "Updating assembly version"
-  Write-Host
-  Update-AssemblyInfoFiles $sourceDir ($majorVersion + '.0.0') $version
+task Build -depends Clean {
+  $script:enabledBuilds = $builds | ? {$_.Enabled}
+  Write-Host -ForegroundColor Green "Found $($script:enabledBuilds.Length) enabled builds"
 
-  foreach ($build in $builds)
+  mkdir "$buildDir\Temp" -Force
+  
+  if ($ensureNetCliSdk)
   {
-    $name = $build.Name
-    $finalDir = $build.FinalDir
-    $sign = ($build.Sign -and $signAssemblies)
-
-    Write-Host -ForegroundColor Green "Building " $name
-    Write-Host -ForegroundColor Green "Signed " $sign
-    Write-Host
-    exec { msbuild "/t:Clean;Rebuild" /p:Configuration=Release "/p:Platform=Any CPU" /p:OutputPath=bin\Release\$finalDir\ /p:AssemblyOriginatorKeyFile=$signKeyPath "/p:SignAssembly=$sign" "/p:TreatWarningsAsErrors=$treatWarningsAsErrors" (GetConstants $build.Constants $sign) ".\Src\$name.sln" | Out-Default } "Error building $name"
+    EnsureDotNetCli
   }
+  EnsureNuGetExists
+  EnsureNuGetPackage "vswhere" $vswherePath $vswhereVersion
+  EnsureNuGetPackage "NUnit.ConsoleRunner" $nunitConsolePath $nunitConsoleVersion
+
+  $script:msBuildPath = GetMsBuildPath
+  Write-Host "MSBuild path $script:msBuildPath"
+
+  NetCliBuild
 }
 
 # Optional build documentation, add files to final zip
 task Package -depends Build {
-  foreach ($build in $builds)
+  foreach ($build in $script:enabledBuilds)
   {
-    $name = $build.TestsName
-    $finalDir = $build.FinalDir
-    
-    robocopy "$sourceDir\Newtonsoft.Json\bin\Release\$finalDir" $workingDir\Package\Bin\$finalDir *.dll *.pdb *.xml /NP /XO /XF *.CodeAnalysisLog.xml | Out-Default
+    $finalDir = $build.Framework
+
+    $sourcePath = "$sourceDir\Newtonsoft.Json\bin\Release\$finalDir"
+
+    if (!(Test-Path -path $sourcePath))
+    {
+      throw "Could not find $sourcePath"
+    }
+
+    robocopy $sourcePath $workingDir\Package\Bin\$finalDir *.dll *.pdb *.xml /NFL /NDL /NJS /NC /NS /NP /XO /XF *.CodeAnalysisLog.xml | Out-Default
   }
-  
+
   if ($buildNuGet)
   {
-    New-Item -Path $workingDir\NuGet -ItemType Directory
-    Copy-Item -Path "$buildDir\Newtonsoft.Json.nuspec" -Destination $workingDir\NuGet\Newtonsoft.Json.nuspec -recurse
-    
-    foreach ($build in $builds)
-    {
-      if ($build.NuGetDir -ne $null)
-      {
-        $name = $build.TestsName
-        $finalDir = $build.FinalDir
-        $frameworkDirs = $build.NuGetDir.Split(",")
-        
-        foreach ($frameworkDir in $frameworkDirs)
-        {
-          robocopy "$sourceDir\Newtonsoft.Json\bin\Release\$finalDir" $workingDir\NuGet\lib\$frameworkDir *.dll *.pdb *.xml /NP /XO /XF *.CodeAnalysisLog.xml | Out-Default
-        }
-      }
-    }
-  
-    exec { .\Tools\NuGet\NuGet.exe pack $workingDir\NuGet\Newtonsoft.Json.nuspec -Symbols }
-    move -Path .\*.nupkg -Destination $workingDir\NuGet
+    Write-Host -ForegroundColor Green "Copy NuGet package"
+
+    mkdir $workingDir\NuGet
+    move -Path $sourceDir\Newtonsoft.Json\bin\Release\*.nupkg -Destination $workingDir\NuGet
+    move -Path $sourceDir\Newtonsoft.Json\bin\Release\*.snupkg -Destination $workingDir\NuGet
   }
-  
+
+  Write-Host "Build documentation: $buildDocumentation"
+
   if ($buildDocumentation)
   {
-    $mainBuild = $builds | where { $_.Name -eq "Newtonsoft.Json" } | select -first 1
-    $mainBuildFinalDir = $mainBuild.FinalDir
+    $mainBuild = $script:enabledBuilds | where { $_.Framework -eq "net45" } | select -first 1
+    $mainBuildFinalDir = $mainBuild.Framework
     $documentationSourcePath = "$workingDir\Package\Bin\$mainBuildFinalDir"
+    $docOutputPath = "$workingDir\Documentation\"
     Write-Host -ForegroundColor Green "Building documentation from $documentationSourcePath"
+    Write-Host "Documentation output to $docOutputPath"
 
-    # Sandcastle has issues when compiling with .NET 4 MSBuild - http://shfb.codeplex.com/Thread/View.aspx?ThreadId=50652
-    exec { msbuild "/t:Clean;Rebuild" /p:Configuration=Release "/p:DocumentationSourcePath=$documentationSourcePath" $docDir\doc.shfbproj | Out-Default } "Error building documentation. Check that you have Sandcastle, Sandcastle Help File Builder and HTML Help Workshop installed."
-    
+    # Sandcastle has issues when compiling with .NET 4 MSBuild
+    exec { & $script:msBuildPath "/t:Clean;Rebuild" "/v:$msbuildVerbosity" "/p:Configuration=Release" "/p:DocumentationSourcePath=$documentationSourcePath" "/p:OutputPath=$docOutputPath" "/m" "$docDir\doc.shfbproj" | Out-Default } "Error building documentation. Check that you have Sandcastle, Sandcastle Help File Builder and HTML Help Workshop installed."
+
     move -Path $workingDir\Documentation\LastBuild.log -Destination $workingDir\Documentation.log
   }
-  
+
   Copy-Item -Path $docDir\readme.txt -Destination $workingDir\Package\
   Copy-Item -Path $docDir\license.txt -Destination $workingDir\Package\
 
-  robocopy $sourceDir $workingDir\Package\Source\Src /MIR /NP /XD .svn bin obj TestResults AppPackages /XF *.suo *.user | Out-Default
-  robocopy $buildDir $workingDir\Package\Source\Build /MIR /NP /XD .svn | Out-Default
-  robocopy $docDir $workingDir\Package\Source\Doc /MIR /NP /XD .svn | Out-Default
-  robocopy $toolsDir $workingDir\Package\Source\Tools /MIR /NP /XD .svn | Out-Default
-  
-  exec { .\Tools\7-zip\7za.exe a -tzip $workingDir\$zipFileName $workingDir\Package\* | Out-Default } "Error zipping"
+  robocopy $sourceDir $workingDir\Package\Source\Src /MIR /NFL /NDL /NJS /NC /NS /NP /XD bin obj TestResults AppPackages .vs artifacts /XF *.suo *.user *.lock.json | Out-Default
+  robocopy $buildDir $workingDir\Package\Source\Build /MIR /NFL /NDL /NJS /NC /NS /NP /XD Temp /XF runbuild.txt | Out-Default
+  robocopy $docDir $workingDir\Package\Source\Doc /MIR /NFL /NDL /NJS /NC /NS /NP | Out-Default
+
+  Compress-Archive -Path $workingDir\Package\* -DestinationPath $workingDir\$zipFileName
 }
 
-# Unzip package to a location
-task Deploy -depends Package {
-  exec { .\Tools\7-zip\7za.exe x -y "-o$workingDir\Deployed" $workingDir\$zipFileName | Out-Default } "Error unzipping"
-}
-
-# Run tests on deployed files
-task Test -depends Deploy {
-  foreach ($build in $builds)
+task Test -depends Build {
+  foreach ($build in $script:enabledBuilds)
   {
-    $name = $build.TestsName
-    if ($name -ne $null)
-    {
-        $finalDir = $build.FinalDir
-        $framework = $build.Framework
-        
-        Write-Host -ForegroundColor Green "Copying test assembly $name to deployed directory"
-        Write-Host
-        robocopy ".\Src\Newtonsoft.Json.Tests\bin\Release\$finalDir" $workingDir\Deployed\Bin\$finalDir /MIR /NP /XO /XF LinqBridge.dll | Out-Default
-        
-        Copy-Item -Path ".\Src\Newtonsoft.Json.Tests\bin\Release\$finalDir\Newtonsoft.Json.Tests.dll" -Destination $workingDir\Deployed\Bin\$finalDir\
-
-        Write-Host -ForegroundColor Green "Running tests " $name
-        Write-Host
-        exec { .\Tools\NUnit\nunit-console.exe "$workingDir\Deployed\Bin\$finalDir\Newtonsoft.Json.Tests.dll" /framework=$framework /xml:$workingDir\$name.xml | Out-Default } "Error running $name tests"
-    }
+    Write-Host "Calling $($build.TestsFunction)"
+    & $build.TestsFunction $build
   }
 }
 
-function GetConstants($constants, $includeSigned)
+function NetCliBuild()
 {
-  $signed = switch($includeSigned) { $true { ";SIGNED" } default { "" } }
+  $projectPath = "$sourceDir\Newtonsoft.Json.sln"
+  $libraryFrameworks = ($script:enabledBuilds | Select-Object @{Name="Framework";Expression={$_.Framework}} | select -expand Framework) -join ";"
+  $testFrameworks = ($script:enabledBuilds | Select-Object @{Name="Resolved";Expression={if ($_.TestFramework -ne $null) { $_.TestFramework } else { $_.Framework }}} | select -expand Resolved) -join ";"
 
-  return "/p:DefineConstants=`"CODE_ANALYSIS;TRACE;$constants$signed`""
+  $additionalConstants = switch($signAssemblies) { $true { "SIGNED" } default { "" } }
+
+  Write-Host -ForegroundColor Green "Restoring packages for $libraryFrameworks in $projectPath"
+  Write-Host
+
+  exec { & $script:msBuildPath "/t:restore" "/v:$msbuildVerbosity" "/p:Configuration=Release" "/p:LibraryFrameworks=`"$libraryFrameworks`"" "/p:TestFrameworks=`"$testFrameworks`"" "/m" $projectPath | Out-Default } "Error restoring $projectPath"
+
+  Write-Host -ForegroundColor Green "Building $libraryFrameworks $assemblyVersion in $projectPath"
+  Write-Host
+
+  exec { & $script:msBuildPath "/t:build" "/v:$msbuildVerbosity" $projectPath "/p:Configuration=Release" "/p:LibraryFrameworks=`"$libraryFrameworks`"" "/p:TestFrameworks=`"$testFrameworks`"" "/p:AssemblyOriginatorKeyFile=$signKeyPath" "/p:SignAssembly=$signAssemblies" "/p:TreatWarningsAsErrors=$treatWarningsAsErrors" "/p:AdditionalConstants=$additionalConstants" "/p:GeneratePackageOnBuild=$buildNuGet" "/p:ContinuousIntegrationBuild=true" "/p:PackageId=$packageId" "/p:VersionPrefix=$majorWithReleaseVersion" "/p:VersionSuffix=$nugetPrerelease" "/p:AssemblyVersion=$assemblyVersion" "/p:FileVersion=$version" "/m" }
+}
+
+function EnsureDotnetCli()
+{
+  Write-Host "Downloading dotnet-install.ps1"
+
+  # https://stackoverflow.com/questions/36265534/invoke-webrequest-ssl-fails
+  [Net.ServicePointManager]::SecurityProtocol = 'TLS12'
+  Invoke-WebRequest `
+    -Uri "https://dot.net/v1/dotnet-install.ps1" `
+    -OutFile "$buildDir\Temp\dotnet-install.ps1"
+
+  exec { & $buildDir\Temp\dotnet-install.ps1 -Channel $netCliChannel -Version $netCliVersion | Out-Default }
+  exec { & $buildDir\Temp\dotnet-install.ps1 -Channel $netCliChannel -Version '3.1.402' | Out-Default }
+  exec { & $buildDir\Temp\dotnet-install.ps1 -Channel $netCliChannel -Version '2.1.811' | Out-Default }
+}
+
+function EnsureNuGetExists()
+{
+  if (!(Test-Path $nugetPath))
+  {
+    Write-Host "Couldn't find nuget.exe. Downloading from $nugetUrl to $nugetPath"
+    (New-Object System.Net.WebClient).DownloadFile($nugetUrl, $nugetPath)
+  }
+}
+
+function EnsureNuGetPackage($packageName, $packagePath, $packageVersion)
+{
+  if (!(Test-Path $packagePath))
+  {
+    Write-Host "Couldn't find $packagePath. Downloading with NuGet"
+    exec { & $nugetPath install $packageName -OutputDirectory $buildDir\Temp -Version $packageVersion -ConfigFile "$sourceDir\nuget.config" | Out-Default } "Error restoring $packagePath"
+  }
+}
+
+function GetMsBuildPath()
+{
+  $path = & $vswherePath\tools\vswhere.exe -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
+  if (!($path))
+  {
+    throw "Could not find Visual Studio install path"
+  }
+
+  $msBuildPath = join-path $path 'MSBuild\15.0\Bin\MSBuild.exe'
+  if (Test-Path $msBuildPath)
+  {
+    return $msBuildPath
+  }
+
+  $msBuildPath = join-path $path 'MSBuild\Current\Bin\MSBuild.exe'
+  if (Test-Path $msBuildPath)
+  {
+    return $msBuildPath
+  }
+
+  throw "Could not find MSBuild path"
+}
+
+function NetCliTests($build)
+{
+  $projectPath = "$sourceDir\Newtonsoft.Json.Tests\Newtonsoft.Json.Tests.csproj"
+  $location = "$sourceDir\Newtonsoft.Json.Tests"
+  $testDir = if ($build.TestFramework -ne $null) { $build.TestFramework } else { $build.Framework }
+
+  try
+  {
+    Set-Location $location
+
+    exec { dotnet --version | Out-Default }
+
+    Write-Host -ForegroundColor Green "Running tests for $testDir"
+    Write-Host "Location: $location"
+    Write-Host "Project path: $projectPath"
+    Write-Host
+
+    exec { dotnet test $projectPath -f $testDir -c Release -l trx -r $workingDir --no-restore --no-build | Out-Default }
+  }
+  finally
+  {
+    Set-Location $baseDir
+  }
+}
+
+function NUnitTests($build)
+{
+  $testDir = if ($build.TestFramework -ne $null) { $build.TestFramework } else { $build.Framework }
+  $framework = $build.NUnitFramework
+  $testRunDir = "$sourceDir\Newtonsoft.Json.Tests\bin\Release\$testDir"
+
+  Write-Host -ForegroundColor Green "Running NUnit tests $testDir"
+  Write-Host
+  try
+  {
+    Set-Location $testRunDir
+    exec { & $nunitConsolePath\tools\nunit3-console.exe "$testRunDir\Newtonsoft.Json.Tests.dll" --framework=$framework --result=$workingDir\$testDir.xml --out=$workingDir\$testDir.txt | Out-Default } "Error running $testDir tests"
+  }
+  finally
+  {
+    Set-Location $baseDir
+  }
 }
 
 function GetVersion($majorVersion)
 {
     $now = [DateTime]::Now
-    
+
     $year = $now.Year - 2000
     $month = $now.Month
     $totalMonthsSince2000 = ($year * 12) + $month
     $day = $now.Day
     $minor = "{0}{1:00}" -f $totalMonthsSince2000, $day
-    
+
     $hour = $now.Hour
     $minute = $now.Minute
     $revision = "{0:00}{1:00}" -f $hour, $minute
-    
+
     return $majorVersion + "." + $minor
 }
 
-function Update-AssemblyInfoFiles ([string] $sourceDir, [string] $assemblyVersionNumber, [string] $fileVersionNumber)
-{
-    $assemblyVersionPattern = 'AssemblyVersion\("[0-9]+(\.([0-9]+|\*)){1,3}"\)'
-    $fileVersionPattern = 'AssemblyFileVersion\("[0-9]+(\.([0-9]+|\*)){1,3}"\)'
-    $assemblyVersion = 'AssemblyVersion("' + $assemblyVersionNumber + '")';
-    $fileVersion = 'AssemblyFileVersion("' + $fileVersionNumber + '")';
-    
-    Get-ChildItem -Path $sourceDir -r -filter AssemblyInfo.cs | ForEach-Object {
-        
-        $filename = $_.Directory.ToString() + '\' + $_.Name
-        Write-Host $filename
-        $filename + ' -> ' + $version
-    
-        (Get-Content $filename) | ForEach-Object {
-            % {$_ -replace $assemblyVersionPattern, $assemblyVersion } |
-            % {$_ -replace $fileVersionPattern, $fileVersion }
-        } | Set-Content $filename
+function Edit-XmlNodes {
+    param (
+        [xml] $doc,
+        [string] $xpath = $(throw "xpath is a required parameter"),
+        [string] $value = $(throw "value is a required parameter")
+    )
+
+    $nodes = $doc.SelectNodes($xpath)
+    $count = $nodes.Count
+
+    Write-Host "Found $count nodes with path '$xpath'"
+
+    foreach ($node in $nodes) {
+        if ($node -ne $null) {
+            if ($node.NodeType -eq "Element")
+            {
+                $node.InnerXml = $value
+            }
+            else
+            {
+                $node.Value = $value
+            }
+        }
     }
+}
+
+function Execute-Command($command) {
+    $currentRetry = 0
+    $success = $false
+    do {
+        try
+        {
+            & $command
+            $success = $true
+        }
+        catch [System.Exception]
+        {
+            if ($currentRetry -gt 5) {
+                throw $_.Exception.ToString()
+            } else {
+                write-host "Retry $currentRetry"
+                Start-Sleep -s 1
+            }
+            $currentRetry = $currentRetry + 1
+        }
+    } while (!$success)
 }

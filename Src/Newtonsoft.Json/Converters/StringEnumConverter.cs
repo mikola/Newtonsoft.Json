@@ -1,4 +1,5 @@
 ﻿#region License
+
 // Copyright (c) 2007 James Newton-King
 //
 // Permission is hereby granted, free of charge, to any person
@@ -21,6 +22,7 @@
 // WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 // OTHER DEALINGS IN THE SOFTWARE.
+
 #endregion
 
 using System;
@@ -29,207 +31,246 @@ using System.Globalization;
 using System.Reflection;
 using System.Runtime.Serialization;
 using Newtonsoft.Json.Utilities;
-#if NET20
+using Newtonsoft.Json.Serialization;
+#if !HAVE_LINQ
 using Newtonsoft.Json.Utilities.LinqBridge;
 #else
 using System.Linq;
+
 #endif
 
 namespace Newtonsoft.Json.Converters
 {
-  /// <summary>
-  /// Converts an <see cref="Enum"/> to and from its name string value.
-  /// </summary>
-  public class StringEnumConverter : JsonConverter
-  {
-    private readonly Dictionary<Type, BidirectionalDictionary<string, string>> _enumMemberNamesPerType = new Dictionary<Type, BidirectionalDictionary<string, string>>();
-
     /// <summary>
-    /// Gets or sets a value indicating whether the written enum text should be camel case.
+    /// Converts an <see cref="Enum"/> to and from its name string value.
     /// </summary>
-    /// <value><c>true</c> if the written enum text will be camel case; otherwise, <c>false</c>.</value>
-    public bool CamelCaseText { get; set; }
-    
-    /// <summary>
-    /// Writes the JSON representation of the object.
-    /// </summary>
-    /// <param name="writer">The <see cref="JsonWriter"/> to write to.</param>
-    /// <param name="value">The value.</param>
-    /// <param name="serializer">The calling serializer.</param>
-    public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+    public class StringEnumConverter : JsonConverter
     {
-      if (value == null)
-      {
-        writer.WriteNull();
-        return;
-      }
-
-      Enum e = (Enum)value;
-
-      string enumName = e.ToString("G");
-
-      if (char.IsNumber(enumName[0]) || enumName[0] == '-')
-      {
-        // enum value has no name so write number
-        writer.WriteValue(value);
-      }
-      else
-      {
-        BidirectionalDictionary<string, string> map = GetEnumNameMap(e.GetType());
-
-        string[] names = enumName.Split(',');
-        for (int i = 0; i < names.Length; i++)
+        /// <summary>
+        /// Gets or sets a value indicating whether the written enum text should be camel case.
+        /// The default value is <c>false</c>.
+        /// </summary>
+        /// <value><c>true</c> if the written enum text will be camel case; otherwise, <c>false</c>.</value>
+        [Obsolete("StringEnumConverter.CamelCaseText is obsolete. Set StringEnumConverter.NamingStrategy with CamelCaseNamingStrategy instead.")]
+        public bool CamelCaseText
         {
-          string name = names[i].Trim();
+            get => NamingStrategy is CamelCaseNamingStrategy ? true : false;
+            set
+            {
+                if (value)
+                {
+                    if (NamingStrategy is CamelCaseNamingStrategy)
+                    {
+                        return;
+                    }
 
-          string resolvedEnumName;
-          map.TryGetByFirst(name, out resolvedEnumName);
-          resolvedEnumName = resolvedEnumName ?? name;
+                    NamingStrategy = new CamelCaseNamingStrategy();
+                }
+                else
+                {
+                    if (!(NamingStrategy is CamelCaseNamingStrategy))
+                    {
+                        return;
+                    }
 
-          if (CamelCaseText)
-            resolvedEnumName = StringUtils.ToCamelCase(resolvedEnumName);
-
-          names[i] = resolvedEnumName;
+                    NamingStrategy = null;
+                }
+            }
         }
 
-        string finalName = string.Join(", ", names);
+        /// <summary>
+        /// Gets or sets the naming strategy used to resolve how enum text is written.
+        /// </summary>
+        /// <value>The naming strategy used to resolve how enum text is written.</value>
+        public NamingStrategy? NamingStrategy { get; set; }
 
-        writer.WriteValue(finalName);
-      }
-    }
+        /// <summary>
+        /// Gets or sets a value indicating whether integer values are allowed when serializing and deserializing.
+        /// The default value is <c>true</c>.
+        /// </summary>
+        /// <value><c>true</c> if integers are allowed when serializing and deserializing; otherwise, <c>false</c>.</value>
+        public bool AllowIntegerValues { get; set; } = true;
 
-    /// <summary>
-    /// Reads the JSON representation of the object.
-    /// </summary>
-    /// <param name="reader">The <see cref="JsonReader"/> to read from.</param>
-    /// <param name="objectType">Type of the object.</param>
-    /// <param name="existingValue">The existing value of object being read.</param>
-    /// <param name="serializer">The calling serializer.</param>
-    /// <returns>The object value.</returns>
-    public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
-    {
-      bool isNullable = ReflectionUtils.IsNullableType(objectType);
-      Type t = isNullable ? Nullable.GetUnderlyingType(objectType) : objectType;
-
-      if (reader.TokenType == JsonToken.Null)
-      {
-        if (!ReflectionUtils.IsNullableType(objectType))
-          throw JsonSerializationException.Create(reader, "Cannot convert null value to {0}.".FormatWith(CultureInfo.InvariantCulture, objectType));
-
-        return null;
-      }
-
-      try
-      {
-        if (reader.TokenType == JsonToken.String)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="StringEnumConverter"/> class.
+        /// </summary>
+        public StringEnumConverter()
         {
-          string enumText = reader.Value.ToString();
-          if (enumText == string.Empty && isNullable)
-            return null;
+        }
 
-          string finalEnumText;
-
-          BidirectionalDictionary<string, string> map = GetEnumNameMap(t);
-          if (enumText.IndexOf(',') != -1)
-          {
-            string[] names = enumText.Split(',');
-            for (int i = 0; i < names.Length; i++)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="StringEnumConverter"/> class.
+        /// </summary>
+        /// <param name="camelCaseText"><c>true</c> if the written enum text will be camel case; otherwise, <c>false</c>.</param>
+        [Obsolete("StringEnumConverter(bool) is obsolete. Create a converter with StringEnumConverter(NamingStrategy, bool) instead.")]
+        public StringEnumConverter(bool camelCaseText)
+        {
+            if (camelCaseText)
             {
-              string name = names[i].Trim();
+                NamingStrategy = new CamelCaseNamingStrategy();
+            }
+        }
 
-              names[i] = ResolvedEnumName(map, name);
+        /// <summary>
+        /// Initializes a new instance of the <see cref="StringEnumConverter"/> class.
+        /// </summary>
+        /// <param name="namingStrategy">The naming strategy used to resolve how enum text is written.</param>
+        /// <param name="allowIntegerValues"><c>true</c> if integers are allowed when serializing and deserializing; otherwise, <c>false</c>.</param>
+        public StringEnumConverter(NamingStrategy namingStrategy, bool allowIntegerValues = true)
+        {
+            NamingStrategy = namingStrategy;
+            AllowIntegerValues = allowIntegerValues;
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="StringEnumConverter"/> class.
+        /// </summary>
+        /// <param name="namingStrategyType">The <see cref="System.Type"/> of the <see cref="Newtonsoft.Json.Serialization.NamingStrategy"/> used to write enum text.</param>
+        public StringEnumConverter(Type namingStrategyType)
+        {
+            ValidationUtils.ArgumentNotNull(namingStrategyType, nameof(namingStrategyType));
+
+            NamingStrategy = JsonTypeReflector.CreateNamingStrategyInstance(namingStrategyType, null);
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="StringEnumConverter"/> class.
+        /// </summary>
+        /// <param name="namingStrategyType">The <see cref="System.Type"/> of the <see cref="Newtonsoft.Json.Serialization.NamingStrategy"/> used to write enum text.</param>
+        /// <param name="namingStrategyParameters">
+        /// The parameter list to use when constructing the <see cref="Newtonsoft.Json.Serialization.NamingStrategy"/> described by <paramref name="namingStrategyType"/>.
+        /// If <c>null</c>, the default constructor is used.
+        /// When non-<c>null</c>, there must be a constructor defined in the <see cref="Newtonsoft.Json.Serialization.NamingStrategy"/> that exactly matches the number,
+        /// order, and type of these parameters.
+        /// </param>
+        public StringEnumConverter(Type namingStrategyType, object[] namingStrategyParameters)
+        {
+            ValidationUtils.ArgumentNotNull(namingStrategyType, nameof(namingStrategyType));
+
+            NamingStrategy = JsonTypeReflector.CreateNamingStrategyInstance(namingStrategyType, namingStrategyParameters);
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="StringEnumConverter"/> class.
+        /// </summary>
+        /// <param name="namingStrategyType">The <see cref="System.Type"/> of the <see cref="Newtonsoft.Json.Serialization.NamingStrategy"/> used to write enum text.</param>
+        /// <param name="namingStrategyParameters">
+        /// The parameter list to use when constructing the <see cref="Newtonsoft.Json.Serialization.NamingStrategy"/> described by <paramref name="namingStrategyType"/>.
+        /// If <c>null</c>, the default constructor is used.
+        /// When non-<c>null</c>, there must be a constructor defined in the <see cref="Newtonsoft.Json.Serialization.NamingStrategy"/> that exactly matches the number,
+        /// order, and type of these parameters.
+        /// </param>
+        /// <param name="allowIntegerValues"><c>true</c> if integers are allowed when serializing and deserializing; otherwise, <c>false</c>.</param>
+        public StringEnumConverter(Type namingStrategyType, object[] namingStrategyParameters, bool allowIntegerValues)
+        {
+            ValidationUtils.ArgumentNotNull(namingStrategyType, nameof(namingStrategyType));
+
+            NamingStrategy = JsonTypeReflector.CreateNamingStrategyInstance(namingStrategyType, namingStrategyParameters);
+            AllowIntegerValues = allowIntegerValues;
+        }
+
+        /// <summary>
+        /// Writes the JSON representation of the object.
+        /// </summary>
+        /// <param name="writer">The <see cref="JsonWriter"/> to write to.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="serializer">The calling serializer.</param>
+        public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer)
+        {
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
             }
 
-            finalEnumText = string.Join(", ", names);
-          }
-          else
-          {
-            finalEnumText = ResolvedEnumName(map, enumText);
-          }
+            Enum e = (Enum)value;
 
-          return Enum.Parse(t, finalEnumText, true);
+            if (!EnumUtils.TryToString(e.GetType(), value, NamingStrategy, out string? enumName))
+            {
+                if (!AllowIntegerValues)
+                {
+                    throw JsonSerializationException.Create(null, writer.ContainerPath, "Integer value {0} is not allowed.".FormatWith(CultureInfo.InvariantCulture, e.ToString("D")), null);
+                }
+
+                // enum value has no name so write number
+                writer.WriteValue(value);
+            }
+            else
+            {
+                writer.WriteValue(enumName);
+            }
         }
 
-        if (reader.TokenType == JsonToken.Integer)
-          return ConvertUtils.ConvertOrCast(reader.Value, CultureInfo.InvariantCulture, t);
-      }
-      catch (Exception ex)
-      {
-        throw JsonSerializationException.Create(reader, "Error converting value {0} to type '{1}'.".FormatWith(CultureInfo.InvariantCulture, MiscellaneousUtils.FormatValueForPrint(reader.Value), objectType), ex);
-      }
-
-
-      throw JsonSerializationException.Create(reader, "Unexpected token when parsing enum. Expected String or Integer, got {0}.".FormatWith(CultureInfo.InvariantCulture, reader.TokenType));
-    }
-
-    private static string ResolvedEnumName(BidirectionalDictionary<string, string> map, string enumText)
-    {
-      string resolvedEnumName;
-      map.TryGetBySecond(enumText, out resolvedEnumName);
-      resolvedEnumName = resolvedEnumName ?? enumText;
-      return resolvedEnumName;
-    }
-
-    private BidirectionalDictionary<string, string> GetEnumNameMap(Type t)
-    {
-      BidirectionalDictionary<string, string> map;
-
-      if (!_enumMemberNamesPerType.TryGetValue(t, out map))
-      {
-        lock (_enumMemberNamesPerType)
+        /// <summary>
+        /// Reads the JSON representation of the object.
+        /// </summary>
+        /// <param name="reader">The <see cref="JsonReader"/> to read from.</param>
+        /// <param name="objectType">Type of the object.</param>
+        /// <param name="existingValue">The existing value of object being read.</param>
+        /// <param name="serializer">The calling serializer.</param>
+        /// <returns>The object value.</returns>
+        public override object? ReadJson(JsonReader reader, Type objectType, object? existingValue, JsonSerializer serializer)
         {
-          if (_enumMemberNamesPerType.TryGetValue(t, out map))
-            return map;
-
-          map = new BidirectionalDictionary<string, string>(
-            StringComparer.OrdinalIgnoreCase,
-            StringComparer.OrdinalIgnoreCase);
-
-          foreach (FieldInfo f in t.GetFields())
-          {
-            string n1 = f.Name;
-            string n2;
-            
-#if !NET20
-            n2 = f.GetCustomAttributes(typeof (EnumMemberAttribute), true)
-                          .Cast<EnumMemberAttribute>()
-                          .Select(a => a.Value)
-                          .SingleOrDefault() ?? f.Name;
-#else
-            n2 = f.Name;
-#endif
-
-            string s;
-            if (map.TryGetBySecond(n2, out s))
+            if (reader.TokenType == JsonToken.Null)
             {
-              throw new InvalidOperationException("Enum name '{0}' already exists on enum '{1}'."
-                .FormatWith(CultureInfo.InvariantCulture, n2, t.Name));
+                if (!ReflectionUtils.IsNullableType(objectType))
+                {
+                    throw JsonSerializationException.Create(reader, "Cannot convert null value to {0}.".FormatWith(CultureInfo.InvariantCulture, objectType));
+                }
+
+                return null;
             }
 
-            map.Set(n1, n2);
-          }
+            bool isNullable = ReflectionUtils.IsNullableType(objectType);
+            Type t = isNullable ? Nullable.GetUnderlyingType(objectType) : objectType;
 
-          _enumMemberNamesPerType[t] = map;
+            try
+            {
+                if (reader.TokenType == JsonToken.String)
+                {
+                    string? enumText = reader.Value?.ToString();
+
+                    if (StringUtils.IsNullOrEmpty(enumText) && isNullable)
+                    {
+                        return null;
+                    }
+
+                    return EnumUtils.ParseEnum(t, NamingStrategy, enumText!, !AllowIntegerValues);
+                }
+
+                if (reader.TokenType == JsonToken.Integer)
+                {
+                    if (!AllowIntegerValues)
+                    {
+                        throw JsonSerializationException.Create(reader, "Integer value {0} is not allowed.".FormatWith(CultureInfo.InvariantCulture, reader.Value));
+                    }
+
+                    return ConvertUtils.ConvertOrCast(reader.Value, CultureInfo.InvariantCulture, t);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw JsonSerializationException.Create(reader, "Error converting value {0} to type '{1}'.".FormatWith(CultureInfo.InvariantCulture, MiscellaneousUtils.ToString(reader.Value), objectType), ex);
+            }
+
+            // we don't actually expect to get here.
+            throw JsonSerializationException.Create(reader, "Unexpected token {0} when parsing enum.".FormatWith(CultureInfo.InvariantCulture, reader.TokenType));
         }
-      }
 
-      return map;
+        /// <summary>
+        /// Determines whether this instance can convert the specified object type.
+        /// </summary>
+        /// <param name="objectType">Type of the object.</param>
+        /// <returns>
+        /// <c>true</c> if this instance can convert the specified object type; otherwise, <c>false</c>.
+        /// </returns>
+        public override bool CanConvert(Type objectType)
+        {
+            Type t = (ReflectionUtils.IsNullableType(objectType))
+                ? Nullable.GetUnderlyingType(objectType)
+                : objectType;
+
+            return t.IsEnum();
+        }
     }
-
-    /// <summary>
-    /// Determines whether this instance can convert the specified object type.
-    /// </summary>
-    /// <param name="objectType">Type of the object.</param>
-    /// <returns>
-    /// <c>true</c> if this instance can convert the specified object type; otherwise, <c>false</c>.
-    /// </returns>
-    public override bool CanConvert(Type objectType)
-    {
-      Type t = (ReflectionUtils.IsNullableType(objectType))
-      ? Nullable.GetUnderlyingType(objectType)
-      : objectType;
-
-      return t.IsEnum();
-    }
-  }
 }

@@ -24,78 +24,100 @@
 #endregion
 
 using System;
+using System.IO;
+#if !(PORTABLE || DNXCORE50) || NETSTANDARD2_0
+using System.Runtime.Serialization.Formatters.Binary;
+#endif
 using Newtonsoft.Json.Schema;
-#if !NETFX_CORE
-using NUnit.Framework;
+#if DNXCORE50
+using Xunit;
+using Test = Xunit.FactAttribute;
+using Assert = Newtonsoft.Json.Tests.XUnitAssert;
 #else
-using Microsoft.VisualStudio.TestPlatform.UnitTestFramework;
-using TestFixture = Microsoft.VisualStudio.TestPlatform.UnitTestFramework.TestClassAttribute;
-using Test = Microsoft.VisualStudio.TestPlatform.UnitTestFramework.TestMethodAttribute;
+using NUnit.Framework;
+
 #endif
 
 namespace Newtonsoft.Json.Tests
 {
-  [TestFixture]
-  public class ExceptionTests : TestFixtureBase
-  {
-    [Test]
-    public void JsonSerializationException()
+    [TestFixture]
+    public class ExceptionTests : TestFixtureBase
     {
-      JsonSerializationException exception = new JsonSerializationException();
-      Assert.AreEqual("Exception of type 'Newtonsoft.Json.JsonSerializationException' was thrown.", exception.Message);
+        [Test]
+        public void JsonSerializationException()
+        {
+            JsonSerializationException exception = new JsonSerializationException();
+            Assert.AreEqual("Exception of type 'Newtonsoft.Json.JsonSerializationException' was thrown.", exception.Message);
 
-      exception = new JsonSerializationException("Message!");
-      Assert.AreEqual("Message!", exception.Message);
-      Assert.AreEqual(null, exception.InnerException);
+            exception = new JsonSerializationException("Message!");
+            Assert.AreEqual("Message!", exception.Message);
+            Assert.AreEqual(null, exception.InnerException);
 
-      exception = new JsonSerializationException("Message!", new Exception("Inner!"));
-      Assert.AreEqual("Message!", exception.Message);
-      Assert.AreEqual("Inner!", exception.InnerException.Message);
+            exception = new JsonSerializationException("Message!", new Exception("Inner!"));
+            Assert.AreEqual("Message!", exception.Message);
+            Assert.AreEqual("Inner!", exception.InnerException.Message);
+        }
+
+        [Test]
+        public void JsonWriterException()
+        {
+            JsonWriterException exception = new JsonWriterException();
+            Assert.AreEqual("Exception of type 'Newtonsoft.Json.JsonWriterException' was thrown.", exception.Message);
+
+            exception = new JsonWriterException("Message!");
+            Assert.AreEqual("Message!", exception.Message);
+            Assert.AreEqual(null, exception.InnerException);
+
+            exception = new JsonWriterException("Message!", new Exception("Inner!"));
+            Assert.AreEqual("Message!", exception.Message);
+            Assert.AreEqual("Inner!", exception.InnerException.Message);
+        }
+
+        [Test]
+        public void JsonReaderException()
+        {
+            JsonReaderException exception = new JsonReaderException();
+            Assert.AreEqual("Exception of type 'Newtonsoft.Json.JsonReaderException' was thrown.", exception.Message);
+
+            exception = new JsonReaderException("Message!");
+            Assert.AreEqual("Message!", exception.Message);
+            Assert.AreEqual(null, exception.InnerException);
+
+            exception = new JsonReaderException("Message!", new Exception("Inner!"));
+            Assert.AreEqual("Message!", exception.Message);
+            Assert.AreEqual("Inner!", exception.InnerException.Message);
+        }
+
+#pragma warning disable 618
+        [Test]
+        public void JsonSchemaException()
+        {
+            JsonSchemaException exception = new JsonSchemaException();
+            Assert.AreEqual("Exception of type 'Newtonsoft.Json.Schema.JsonSchemaException' was thrown.", exception.Message);
+
+            exception = new JsonSchemaException("Message!");
+            Assert.AreEqual("Message!", exception.Message);
+            Assert.AreEqual(null, exception.InnerException);
+
+            exception = new JsonSchemaException("Message!", new Exception("Inner!"));
+            Assert.AreEqual("Message!", exception.Message);
+            Assert.AreEqual("Inner!", exception.InnerException.Message);
+        }
+#pragma warning restore 618
+
+#if !(PORTABLE || PORTABLE40 || DNXCORE50) || NETSTANDARD2_0
+        [Test]
+        public void BinarySerializeException()
+        {
+            JsonReaderException exception = new JsonReaderException("message!");
+            using (var memoryStream = new MemoryStream())
+            {
+                var binaryFormatter = new BinaryFormatter();
+#pragma warning disable SYSLIB0011 // Type or member is obsolete
+                binaryFormatter.Serialize(memoryStream, exception);
+#pragma warning restore SYSLIB0011 // Type or member is obsolete
+            }
+        }
+#endif
     }
-
-    [Test]
-    public void JsonWriterException()
-    {
-      JsonWriterException exception = new JsonWriterException();
-      Assert.AreEqual("Exception of type 'Newtonsoft.Json.JsonWriterException' was thrown.", exception.Message);
-
-      exception = new JsonWriterException("Message!");
-      Assert.AreEqual("Message!", exception.Message);
-      Assert.AreEqual(null, exception.InnerException);
-
-      exception = new JsonWriterException("Message!", new Exception("Inner!"));
-      Assert.AreEqual("Message!", exception.Message);
-      Assert.AreEqual("Inner!", exception.InnerException.Message);
-    }
-
-    [Test]
-    public void JsonReaderException()
-    {
-      JsonReaderException exception = new JsonReaderException();
-      Assert.AreEqual("Exception of type 'Newtonsoft.Json.JsonReaderException' was thrown.", exception.Message);
-
-      exception = new JsonReaderException("Message!");
-      Assert.AreEqual("Message!", exception.Message);
-      Assert.AreEqual(null, exception.InnerException);
-
-      exception = new JsonReaderException("Message!", new Exception("Inner!"));
-      Assert.AreEqual("Message!", exception.Message);
-      Assert.AreEqual("Inner!", exception.InnerException.Message);
-    }
-
-    [Test]
-    public void JsonSchemaException()
-    {
-      JsonSchemaException exception = new JsonSchemaException();
-      Assert.AreEqual("Exception of type 'Newtonsoft.Json.Schema.JsonSchemaException' was thrown.", exception.Message);
-
-      exception = new JsonSchemaException("Message!");
-      Assert.AreEqual("Message!", exception.Message);
-      Assert.AreEqual(null, exception.InnerException);
-
-      exception = new JsonSchemaException("Message!", new Exception("Inner!"));
-      Assert.AreEqual("Message!", exception.Message);
-      Assert.AreEqual("Inner!", exception.InnerException.Message);
-    }
-  }
 }

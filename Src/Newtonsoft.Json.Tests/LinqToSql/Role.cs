@@ -23,6 +23,8 @@
 // OTHER DEALINGS IN THE SOFTWARE.
 #endregion
 
+#if !(NET20 || DNXCORE50)
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -32,15 +34,18 @@ using System.Text;
 
 namespace Newtonsoft.Json.Tests.LinqToSql
 {
-  [MetadataType(typeof(RoleMetadata))]
-  public partial class Role
-  {
-    public class RoleMetadata
+    [MetadataType(typeof(RoleMetadata))]
+    public partial class Role
     {
-      [JsonConverter(typeof(GuidByteArrayConverter))]
-      public Guid RoleId { get; set; }
-      [JsonIgnore]
-      public EntitySet<PersonRole> PersonRoles { get; set; }
+        public class RoleMetadata
+        {
+            [JsonConverter(typeof(GuidByteArrayConverter))]
+            public Guid RoleId { get; set; }
+
+            [JsonIgnore]
+            public EntitySet<PersonRole> PersonRoles { get; set; }
+        }
     }
-  }
 }
+
+#endif

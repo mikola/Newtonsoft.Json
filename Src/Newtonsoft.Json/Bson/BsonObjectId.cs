@@ -26,30 +26,35 @@
 using System;
 using Newtonsoft.Json.Utilities;
 
+#nullable disable
+
 namespace Newtonsoft.Json.Bson
 {
-  /// <summary>
-  /// Represents a BSON Oid (object id).
-  /// </summary>
-  public class BsonObjectId
-  {
     /// <summary>
-    /// Gets or sets the value of the Oid.
+    /// Represents a BSON Oid (object id).
     /// </summary>
-    /// <value>The value of the Oid.</value>
-    public byte[] Value { get; private set; }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="BsonObjectId"/> class.
-    /// </summary>
-    /// <param name="value">The Oid value.</param>
-    public BsonObjectId(byte[] value)
+    [Obsolete("BSON reading and writing has been moved to its own package. See https://www.nuget.org/packages/Newtonsoft.Json.Bson for more details.")]
+    public class BsonObjectId
     {
-      ValidationUtils.ArgumentNotNull(value, "value");
-      if (value.Length != 12)
-        throw new ArgumentException("An ObjectId must be 12 bytes", "value");
+        /// <summary>
+        /// Gets or sets the value of the Oid.
+        /// </summary>
+        /// <value>The value of the Oid.</value>
+        public byte[] Value { get; }
 
-      Value = value;
+        /// <summary>
+        /// Initializes a new instance of the <see cref="BsonObjectId"/> class.
+        /// </summary>
+        /// <param name="value">The Oid value.</param>
+        public BsonObjectId(byte[] value)
+        {
+            ValidationUtils.ArgumentNotNull(value, nameof(value));
+            if (value.Length != 12)
+            {
+                throw new ArgumentException("An ObjectId must be 12 bytes", nameof(value));
+            }
+
+            Value = value;
+        }
     }
-  }
 }

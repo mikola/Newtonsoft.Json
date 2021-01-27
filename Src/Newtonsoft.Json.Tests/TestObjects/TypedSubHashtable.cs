@@ -27,11 +27,11 @@ using System.Collections;
 
 namespace Newtonsoft.Json.Tests.TestObjects
 {
-#if !SILVERLIGHT && !NETFX_CORE
-  public class TypedSubHashtable
-  {
-    public string Name;
-    public Hashtable Hash;
-  }
+#if !(DNXCORE50) || NETSTANDARD2_0
+    public class TypedSubHashtable
+    {
+        public string Name;
+        public Hashtable Hash;
+    }
 #endif
 }
